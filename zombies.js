@@ -1,91 +1,92 @@
-/**
- * zombies.js
- * ------------------------------------------------------------
- * Simulação de zumbis EM TEMPO REAL no servidor Node (substitui a
- * simulação "lazy" que existia em api/zombie_engine.php — aquele
- * arquivo continua no projeto como legado, mas não é mais chamado).
- *
- * Como o game loop aqui é contínuo (setInterval a 20Hz, veja
- * gameServer.js), cada tick já tem um dt fixo e um único processo
- * Node processa tudo em sequência — nada de "optimistic concurrency"
- * como no PHP (não existe corrida entre requisições concorrentes).
- *
- * Estados: idle -> wander -> idle -> chase -> attack -> (volta pra
- * chase/idle) -> dead. Mesmo comportamento do PHP antigo, só que
- * avançado a cada tick real em vez de "desde o último sync".
- * ------------------------------------------------------------
- */
-
 const worldMap = require('./worldMap');
 const config = require('./config');
 
 let nextZombieId = 1;
 
+const ZOMBIE_TYPES = Object.freeze({
+  normal:   { type: 'normal',   health: 1.00, speed: 1.00, radius: 15, damage: 10, reward: 10 },
+  runner:   { type: 'runner',   health: 0.70, speed: 1.55, radius: 13, damage: 8,  reward: 14 },
+  tank:     { type: 'tank',     health: 3.25, speed: 0.56, radius: 23, damage: 20, reward: 32 },
+  exploder: { type: 'exploder', health: 1.15, speed: 0.90, radius: 17, damage: 28, reward: 22, explosionRadius: 115 },
+  spitter:  { type: 'spitter',  health: 0.90, speed: 0.72, radius: 15, damage: 9,  reward: 20, spitRange: 270, spitCooldownMs: 1800 },
+  boss:     { type: 'boss',     health: 8.00, speed: 0.68, radius: 33, damage: 28, reward: 250 },
+});
+
 class ZombieSystem {
   constructor() {
-    /** @type {Map<number, object>} */
     this.zombies = new Map();
-
     this.healthMultiplier = 1;
     this.speedMultiplier = 1;
     this.maxZombiesThisRound = 0;
     this.totalSpawnedThisRound = 0;
+    this.roundNumber = 0;
+    this.bossSpawned = false;
   }
 
-  /** Chamado no início de cada round (round:start). */
-  setRoundParameters({ totalZombies, healthMultiplier, speedMultiplier }) {
+  setRoundParameters({ totalZombies, healthMultiplier, speedMultiplier, roundNumber = 0 }) {
     this.zombies.clear();
     this.maxZombiesThisRound = totalZombies;
     this.healthMultiplier = healthMultiplier;
     this.speedMultiplier = speedMultiplier;
+    this.roundNumber = roundNumber;
     this.totalSpawnedThisRound = 0;
+    this.bossSpawned = false;
   }
 
   get aliveCount() {
-    let total = 0;
-    for (const z of this.zombies.values()) {
-      if (z.state !== 'dead') total++;
-    }
-    return total;
+    let n = 0;
+    for (const z of this.zombies.values()) if (z.state !== 'dead') n++;
+    return n;
   }
 
   get remainingToSpawn() {
     return Math.max(0, this.maxZombiesThisRound - this.totalSpawnedThisRound);
   }
 
-  /** Round acaba quando já nasceram todos os zumbis dele e nenhum está mais vivo. */
   isRoundComplete() {
     return this.remainingToSpawn === 0 && this.aliveCount === 0 && this.zombies.size === 0;
   }
 
-  _zombieSpeed() {
-    return config.ZOMBIE_BASE_SPEED * this.speedMultiplier;
-  }
+  _pickType() {
+    if (this.roundNumber > 0 && this.roundNumber % 5 === 0 && !this.bossSpawned) {
+      this.bossSpawned = true;
+      return 'boss';
+    }
 
-  _zombieMaxHealth() {
-    return Math.round(config.ZOMBIE_BASE_HEALTH * this.healthMultiplier);
+    const r = Math.random();
+    const round = this.roundNumber;
+    if (round >= 8 && r < 0.10) return 'tank';
+    if (round >= 6 && r < 0.22) return 'spitter';
+    if (round >= 4 && r < 0.34) return 'exploder';
+    if (round >= 2 && r < 0.56) return 'runner';
+    return 'normal';
   }
 
   _pickSpawnPoint(alivePlayers) {
     const margin = 80;
-    for (let attempt = 0; attempt < 25; attempt++) {
-      const x = margin + Math.random() * (config.WORLD_WIDTH - margin * 2);
-      const y = margin + Math.random() * (config.WORLD_HEIGHT - margin * 2);
-
-      if (worldMap.circleHitsAnyObstacle(x, y, config.ZOMBIE_COLLISION_RADIUS + config.ZOMBIE_SPAWN_OBSTACLE_MARGIN)) {
-        continue;
+    for (let attempt = 0; attempt < 45; attempt++) {
+      let x, y;
+      if (alivePlayers.length > 0) {
+        const anchor = alivePlayers[Math.floor(Math.random() * alivePlayers.length)];
+        const a = Math.random() * Math.PI * 2;
+        const d = config.ZOMBIE_MIN_SPAWN_DIST_FROM_PLAYER +
+          Math.random() * (config.ZOMBIE_MAX_SPAWN_DIST_FROM_PLAYER - config.ZOMBIE_MIN_SPAWN_DIST_FROM_PLAYER);
+        x = anchor.x + Math.cos(a) * d;
+        y = anchor.y + Math.sin(a) * d;
+      } else {
+        x = margin + Math.random() * (config.WORLD_WIDTH - margin * 2);
+        y = margin + Math.random() * (config.WORLD_HEIGHT - margin * 2);
       }
+
+      x = Math.max(margin, Math.min(config.WORLD_WIDTH - margin, x));
+      y = Math.max(margin, Math.min(config.WORLD_HEIGHT - margin, y));
+      if (worldMap.circleHitsAnyObstacle(x, y, config.ZOMBIE_COLLISION_RADIUS + config.ZOMBIE_SPAWN_OBSTACLE_MARGIN)) continue;
 
       let tooClose = false;
       for (const p of alivePlayers) {
-        if (Math.hypot(x - p.x, y - p.y) < config.ZOMBIE_MIN_SPAWN_DIST_FROM_PLAYER) {
-          tooClose = true;
-          break;
-        }
+        if (Math.hypot(x - p.x, y - p.y) < config.ZOMBIE_MIN_SPAWN_DIST_FROM_PLAYER) { tooClose = true; break; }
       }
-      if (tooClose) continue;
-
-      return { x, y };
+      if (!tooClose) return { x, y };
     }
     return null;
   }
@@ -94,207 +95,184 @@ class ZombieSystem {
     const spot = this._pickSpawnPoint(alivePlayers);
     if (!spot) return false;
 
+    const type = this._pickType();
+    const spec = ZOMBIE_TYPES[type];
+    const maxHealth = Math.max(1, Math.round(config.ZOMBIE_BASE_HEALTH * this.healthMultiplier * spec.health));
     const id = nextZombieId++;
-    const idleTimer = config.ZOMBIE_IDLE_MIN_SECONDS +
-      Math.random() * (config.ZOMBIE_IDLE_MAX_SECONDS - config.ZOMBIE_IDLE_MIN_SECONDS);
 
     this.zombies.set(id, {
-      id,
-      x: spot.x,
-      y: spot.y,
-      health: this._zombieMaxHealth(),
-      maxHealth: this._zombieMaxHealth(),
-      state: 'idle',
-      targetPlayerId: null,
-      directionX: 0,
-      directionY: 1,
-      wanderX: null,
-      wanderY: null,
-      stateTimer: idleTimer,
-      lastAttackAt: 0,
-      deadAt: 0,
+      id, type,
+      x: spot.x, y: spot.y,
+      health: maxHealth, maxHealth,
+      radius: spec.radius,
+      speed: config.ZOMBIE_BASE_SPEED * this.speedMultiplier * spec.speed,
+      damage: spec.damage,
+      reward: spec.reward,
+      state: 'idle', targetPlayerId: null,
+      directionX: 0, directionY: 1,
+      wanderX: null, wanderY: null,
+      stateTimer: config.ZOMBIE_IDLE_MIN_SECONDS + Math.random() * (config.ZOMBIE_IDLE_MAX_SECONDS - config.ZOMBIE_IDLE_MIN_SECONDS),
+      lastAttackAt: 0, deadAt: 0,
     });
-
     this.totalSpawnedThisRound++;
     return true;
   }
 
-  /** Repõe zumbis até o limite do round (e o teto de segurança global). */
   _ensurePopulation(alivePlayers) {
-    const missingForRound = this.remainingToSpawn;
-    if (missingForRound <= 0) return;
-
-    const roomForMore = config.MAX_ALIVE_ZOMBIES - this.aliveCount;
-    const toSpawn = Math.min(missingForRound, roomForMore, 3); // no máx. 3 por tick — evita picos de CPU
-
-    for (let i = 0; i < toSpawn; i++) {
-      if (!this._spawnOne(alivePlayers)) break;
-    }
+    if (this.remainingToSpawn <= 0) return;
+    const room = config.MAX_ALIVE_ZOMBIES - this.aliveCount;
+    const toSpawn = Math.min(this.remainingToSpawn, room, 3);
+    for (let i = 0; i < toSpawn; i++) if (!this._spawnOne(alivePlayers)) break;
   }
 
-  _normalizedDirection(fromX, fromY, toX, toY) {
-    const dx = toX - fromX;
-    const dy = toY - fromY;
-    const dist = Math.hypot(dx, dy);
-    if (dist < 0.0001) return { x: 0, y: 0, dist: 0 };
-    return { x: dx / dist, y: dy / dist, dist };
+  _dir(ax, ay, bx, by) {
+    const dx = bx - ax, dy = by - ay, dist = Math.hypot(dx, dy);
+    return dist < 0.0001 ? { x: 0, y: 0, dist: 0 } : { x: dx / dist, y: dy / dist, dist };
   }
 
-  /**
-   * Avança a simulação um tick. `players` é um array de jogadores
-   * VIVOS { id, x, y }. `onPlayerDamage(playerId, amount)` é chamado
-   * quando um zumbi ataca — quem decide vida/morte do jogador é o
-   * GameServer (mantém o player.js autoritativo em um só lugar).
-   */
-  tick(dt, players, onPlayerDamage) {
+  tick(dt, players, onPlayerDamage, onSpecial) {
     const now = Date.now();
 
-    // --- remove zumbis mortos depois do tempo de fade -----------------
     for (const [id, z] of this.zombies) {
-      if (z.state === 'dead' && now - z.deadAt >= config.ZOMBIE_RESPAWN_DELAY_MS) {
-        this.zombies.delete(id);
-      }
+      if (z.state === 'dead' && now - z.deadAt >= config.ZOMBIE_RESPAWN_DELAY_MS) this.zombies.delete(id);
     }
 
     this._ensurePopulation(players);
 
-    const obstacles = worldMap.getObstacles();
-    const speed = this._zombieSpeed();
-
     for (const z of this.zombies.values()) {
       if (z.state === 'dead') continue;
 
-      // --- 1. Detecção: jogador vivo mais próximo -------------------
       let nearest = null;
-      let nearestDist = config.DETECTION_RADIUS;
+      let nearestDist = config.DETECTION_RADIUS + (z.type === 'boss' ? 180 : 0);
       for (const p of players) {
         const d = Math.hypot(p.x - z.x, p.y - z.y);
-        if (d <= nearestDist) {
-          nearestDist = d;
-          nearest = p;
-        }
+        if (d <= nearestDist) { nearest = p; nearestDist = d; }
       }
 
       if (nearest) {
         z.targetPlayerId = nearest.id;
+        const dir = this._dir(z.x, z.y, nearest.x, nearest.y);
+        if (dir.dist > 0.0001) { z.directionX = dir.x; z.directionY = dir.y; }
 
-        if (nearestDist <= config.ATTACK_RANGE) {
+        const spec = ZOMBIE_TYPES[z.type];
+        if (z.type === 'spitter' && nearestDist > 72 && nearestDist <= spec.spitRange) {
           z.state = 'attack';
-          const dir = this._normalizedDirection(z.x, z.y, nearest.x, nearest.y);
-          if (dir.dist > 0.0001) { z.directionX = dir.x; z.directionY = dir.y; }
-
+          if (now - z.lastAttackAt >= spec.spitCooldownMs) {
+            const wall = worldMap.raycastDistanceToObstacle(z.x, z.y, dir.x, dir.y, nearestDist);
+            if (wall === null || wall >= nearestDist - 12) {
+              z.lastAttackAt = now;
+              onSpecial?.({ type: 'spit', zombie: z, player: nearest, damage: spec.damage });
+            }
+          }
+        } else if (nearestDist <= (z.radius + config.PLAYER_COLLISION_RADIUS + 10)) {
+          z.state = 'attack';
           if (now - z.lastAttackAt >= config.ATTACK_COOLDOWN_MS) {
             z.lastAttackAt = now;
-            onPlayerDamage(nearest.id, config.ZOMBIE_ATTACK_DAMAGE);
+            if (z.type === 'exploder') {
+              z.state = 'dead';
+              z.deadAt = now;
+              onSpecial?.({ type: 'explode', zombie: z, radius: spec.explosionRadius, damage: spec.damage });
+            } else {
+              onPlayerDamage(nearest.id, z.damage);
+            }
           }
         } else {
           z.state = 'chase';
-          const dir = this._normalizedDirection(z.x, z.y, nearest.x, nearest.y);
-          z.directionX = dir.x; z.directionY = dir.y;
-
-          const nextX = z.x + dir.x * speed * dt;
-          const nextY = z.y + dir.y * speed * dt;
-          const moved = worldMap.resolveCircleMovement(z.x, z.y, nextX, nextY, config.ZOMBIE_COLLISION_RADIUS);
+          const nextX = z.x + dir.x * z.speed * dt;
+          const nextY = z.y + dir.y * z.speed * dt;
+          const moved = worldMap.resolveCircleMovement(z.x, z.y, nextX, nextY, z.radius);
           z.x = moved.x; z.y = moved.y;
         }
       } else {
         z.targetPlayerId = null;
-
         if (z.state === 'attack' || z.state === 'chase') {
           z.state = 'idle';
-          z.stateTimer = config.ZOMBIE_IDLE_MIN_SECONDS +
-            Math.random() * (config.ZOMBIE_IDLE_MAX_SECONDS - config.ZOMBIE_IDLE_MIN_SECONDS);
+          z.stateTimer = config.ZOMBIE_IDLE_MIN_SECONDS + Math.random() * (config.ZOMBIE_IDLE_MAX_SECONDS - config.ZOMBIE_IDLE_MIN_SECONDS);
         } else if (z.state === 'idle') {
           z.stateTimer -= dt;
           if (z.stateTimer <= 0) {
-            const angle = Math.random() * Math.PI * 2;
-            const radius = Math.random() * config.ZOMBIE_WANDER_RADIUS;
-            z.wanderX = Math.max(20, Math.min(config.WORLD_WIDTH - 20, z.x + Math.cos(angle) * radius));
-            z.wanderY = Math.max(20, Math.min(config.WORLD_HEIGHT - 20, z.y + Math.sin(angle) * radius));
+            const a = Math.random() * Math.PI * 2, r = Math.random() * config.ZOMBIE_WANDER_RADIUS;
+            z.wanderX = Math.max(20, Math.min(config.WORLD_WIDTH - 20, z.x + Math.cos(a) * r));
+            z.wanderY = Math.max(20, Math.min(config.WORLD_HEIGHT - 20, z.y + Math.sin(a) * r));
             z.state = 'wander';
           }
         } else if (z.state === 'wander') {
-          if (z.wanderX === null || z.wanderY === null) {
+          const dir = this._dir(z.x, z.y, z.wanderX ?? z.x, z.wanderY ?? z.y);
+          if (dir.dist < 6) {
             z.state = 'idle';
-            z.stateTimer = config.ZOMBIE_IDLE_MIN_SECONDS;
+            z.stateTimer = config.ZOMBIE_IDLE_MIN_SECONDS + Math.random() * (config.ZOMBIE_IDLE_MAX_SECONDS - config.ZOMBIE_IDLE_MIN_SECONDS);
           } else {
-            const dir = this._normalizedDirection(z.x, z.y, z.wanderX, z.wanderY);
-            if (dir.dist < 6) {
-              z.state = 'idle';
-              z.stateTimer = config.ZOMBIE_IDLE_MIN_SECONDS +
-                Math.random() * (config.ZOMBIE_IDLE_MAX_SECONDS - config.ZOMBIE_IDLE_MIN_SECONDS);
-            } else {
-              z.directionX = dir.x; z.directionY = dir.y;
-              const wanderSpeed = speed * 0.5;
-              const nextX = z.x + dir.x * wanderSpeed * dt;
-              const nextY = z.y + dir.y * wanderSpeed * dt;
-              const moved = worldMap.resolveCircleMovement(z.x, z.y, nextX, nextY, config.ZOMBIE_COLLISION_RADIUS);
-              z.x = moved.x; z.y = moved.y;
-            }
+            z.directionX = dir.x; z.directionY = dir.y;
+            const moved = worldMap.resolveCircleMovement(z.x, z.y, z.x + dir.x * z.speed * 0.5 * dt, z.y + dir.y * z.speed * 0.5 * dt, z.radius);
+            z.x = moved.x; z.y = moved.y;
           }
         }
       }
 
-      z.x = Math.max(20, Math.min(config.WORLD_WIDTH - 20, z.x));
-      z.y = Math.max(20, Math.min(config.WORLD_HEIGHT - 20, z.y));
+      z.x = Math.max(z.radius, Math.min(config.WORLD_WIDTH - z.radius, z.x));
+      z.y = Math.max(z.radius, Math.min(config.WORLD_HEIGHT - z.radius, z.y));
     }
   }
 
-  /** Aplica dano de tiro (item: servidor nunca confia em kill do cliente). */
   applyDamage(zombieId, amount) {
-    const z = this.zombies.get(zombieId);
+    const z = this.zombies.get(Number(zombieId));
     if (!z || z.state === 'dead') return null;
-
-    z.health = Math.max(0, z.health - amount);
-    let died = false;
-
-    if (z.health <= 0) {
-      z.state = 'dead';
-      z.deadAt = Date.now();
-      died = true;
-    }
-
-    return { health: z.health, died };
+    z.health = Math.max(0, z.health - Math.max(0, Number(amount) || 0));
+    const died = z.health <= 0;
+    if (died) { z.state = 'dead'; z.deadAt = Date.now(); }
+    return { health: z.health, died, zombie: z };
   }
 
-  /** Zumbi mais próximo no caminho do tiro (mesmo hitscan de api/shoot.php). */
+  _headPoint(z) {
+    const len = Math.hypot(z.directionX, z.directionY) || 1;
+    return {
+      x: z.x + (z.directionX / len) * z.radius * 0.38,
+      y: z.y + (z.directionY / len) * z.radius * 0.38,
+      radius: Math.max(5, z.radius * 0.36),
+    };
+  }
+
   findHitZombie(originX, originY, dirX, dirY, maxDistance, wallDistance) {
-    let hit = null;
-    let hitDistance = Infinity;
+    let best = null;
+    let bestDistance = Infinity;
 
     for (const z of this.zombies.values()) {
       if (z.state === 'dead') continue;
+      const maxAllowed = wallDistance === null ? maxDistance : Math.min(maxDistance, wallDistance);
 
-      const proj = worldMap.pointDistanceToRay(z.x, z.y, originX, originY, dirX, dirY, maxDistance);
-      if (proj.distanceFromRay > config.ZOMBIE_COLLISION_RADIUS + 10) continue;
-      if (proj.distanceAlongRay > maxDistance) continue;
-      if (wallDistance !== null && proj.distanceAlongRay > wallDistance) continue;
+      const head = this._headPoint(z);
+      const hp = worldMap.pointDistanceToRay(head.x, head.y, originX, originY, dirX, dirY, maxDistance);
+      const bp = worldMap.pointDistanceToRay(z.x, z.y, originX, originY, dirX, dirY, maxDistance);
 
-      if (proj.distanceAlongRay < hitDistance) {
-        hitDistance = proj.distanceAlongRay;
-        hit = z;
+      let part = null;
+      let distance = Infinity;
+      if (hp.distanceAlongRay >= 0 && hp.distanceAlongRay <= maxAllowed && hp.distanceFromRay <= head.radius) {
+        part = 'head'; distance = hp.distanceAlongRay;
+      } else if (bp.distanceAlongRay >= 0 && bp.distanceAlongRay <= maxAllowed && bp.distanceFromRay <= z.radius + 5) {
+        part = 'body'; distance = bp.distanceAlongRay;
+      }
+
+      if (part && distance < bestDistance) {
+        bestDistance = distance;
+        best = { zombie: z, part, distance };
       }
     }
-
-    return hit;
+    return best;
   }
 
   getSnapshot() {
-    const snapshot = [];
+    const out = [];
     for (const z of this.zombies.values()) {
-      snapshot.push({
-        id: z.id,
-        x: z.x,
-        y: z.y,
-        health: z.health,
-        maxHealth: z.maxHealth,
-        state: z.state,
-        directionX: z.directionX,
-        directionY: z.directionY,
+      out.push({
+        id: z.id, type: z.type, x: z.x, y: z.y,
+        health: z.health, maxHealth: z.maxHealth, state: z.state,
+        directionX: z.directionX, directionY: z.directionY,
+        radius: z.radius, speed: z.speed,
       });
     }
-    return snapshot;
+    return out;
   }
 }
 
+ZombieSystem.TYPES = ZOMBIE_TYPES;
 module.exports = ZombieSystem;

@@ -1,7 +1,7 @@
 {
   "name": "zombie-survival-server",
-  "version": "4.5.0",
-  "description": "Servidor autoritativo do Zombie Survival Online - Fase 4.5 (rounds + tiros remotos)",
+  "version": "5.0.0",
+  "description": "Servidor autoritativo do Zombie Survival Online - Fase 5 (armas, zombies especiais, headshots, loot e loja)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

@@ -1,0 +1,16 @@
+ZOMBIE SURVIVAL ONLINE — FASE 5 — SERVIDOR
+
+DESTINO: repositório zombie-survival-server (GitHub/Render)
+
+Extraia/substitua os arquivos no repositório e rode:
+
+npm install
+npm start
+
+Se iniciar corretamente, pare com Ctrl+C e envie:
+
+git add .
+git commit -m "Fase 5 armas zombies headshots loot e loja"
+git push
+
+Aguarde o deploy do Render ficar Live antes de testar o cliente.
