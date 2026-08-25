@@ -1,5 +1,4 @@
-# Zombie Survival Online — Fases 6–10
+Zombie Survival Online — Server Fase 11
 
-Servidor Node/Socket.IO autoritativo.
-
-Novidades: interações sincronizadas, colisão dinâmica de portas/portões/barricadas e mapa atualizado.
+Node.js + Express + Socket.IO.
+Leia LEIA-ME_FASE7-11.txt.

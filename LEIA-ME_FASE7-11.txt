@@ -1,0 +1,20 @@
+FASE 11 — SERVIDOR RENDER
+
+Substitua os arquivos do repositório zombie-survival-server.
+Depois rode:
+
+npm install
+npm start
+
+git add .
+git commit -m "Fase 11 VFX audio mapa interacoes e revive"
+git push
+
+Revive é autoritativo no servidor.
+Novos eventos Socket.IO:
+player:downed
+player:revive:start
+player:revive:cancel
+player:revived
+
+Não há SQL novo.

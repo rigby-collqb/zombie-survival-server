@@ -8,6 +8,10 @@ const DEFINITIONS = Object.freeze([
   { id:'hospital_crate', type:'crate', label:'CAIXA MÉDICA', x:665, y:810, width:42, height:34, range:88, initial:{opened:false} },
   { id:'military_gate', type:'gate', label:'PORTÃO MILITAR', x:3130, y:2918, width:140, height:24, range:125, cost:600, initial:{unlocked:false,open:false} },
   { id:'military_crate', type:'crate', label:'CAIXA MILITAR', x:3295, y:3150, width:46, height:36, range:92, initial:{opened:false} },
+  { id:'police_crate', type:'crate', label:'ARMÁRIO DA DELEGACIA', x:1690, y:610, width:46, height:36, range:92, initial:{opened:false} },
+  { id:'market_crate', type:'crate', label:'ESTOQUE DO MERCADO', x:2715, y:680, width:46, height:36, range:92, initial:{opened:false} },
+  { id:'hospital_medstation', type:'medstation', label:'ESTAÇÃO MÉDICA', x:755, y:785, width:42, height:42, range:92, cost:60, initial:{} },
+  { id:'scrapyard_ammo', type:'ammo_station', label:'BANCADA DE MUNIÇÃO', x:1705, y:3340, width:50, height:36, range:92, cost:80, initial:{} },
 ]);
 
 class InteractionSystem {
@@ -81,6 +85,14 @@ class InteractionSystem {
       if(item.state.opened)return{success:false,error:'already_used'};
       item.state.opened=true;
       reward=this._giveCrateReward(player,item.id);
+    }else if(item.type==='medstation'){
+      if(player.health>=player.maxHealth)return{success:false,error:'health_full'};
+      const cost=item.cost||0;if(player.money<cost)return{success:false,error:'not_enough_money'};
+      player.money-=cost;const amount=Math.min(60,player.maxHealth-player.health);player.health+=amount;reward={kind:'health',amount};
+    }else if(item.type==='ammo_station'){
+      const state=player.weapons[player.activeWeaponId];if(!state)return{success:false,error:'invalid_weapon'};
+      const cost=item.cost||0;if(player.money<cost)return{success:false,error:'not_enough_money'};
+      player.money-=cost;const amount=45;state.reserve+=amount;reward={kind:'ammo',amount};
     }else return{success:false,error:'invalid_interaction'};
 
     return{success:true,item:this._public(item),reward};
@@ -88,11 +100,11 @@ class InteractionSystem {
 
   _giveCrateReward(player,id){
     const r=Math.random();
-    if((id==='hospital_crate' && player.health<player.maxHealth) || (r>.66 && player.health<player.maxHealth)){
+    if((['hospital_crate','market_crate'].includes(id) && player.health<player.maxHealth) || (r>.66 && player.health<player.maxHealth)){
       const amount=Math.min(45,player.maxHealth-player.health);player.health+=amount;return{kind:'health',amount};
     }
-    if(id==='military_crate' || r<.48){
-      const state=player.weapons[player.activeWeaponId];const amount=id==='military_crate'?60:30;if(state)state.reserve+=amount;return{kind:'ammo',amount};
+    if(['military_crate','police_crate'].includes(id) || r<.48){
+      const state=player.weapons[player.activeWeaponId];const amount=id==='military_crate'?60:id==='police_crate'?45:30;if(state)state.reserve+=amount;return{kind:'ammo',amount};
     }
     const amount=35+Math.floor(Math.random()*46);player.money+=amount;return{kind:'money',amount};
   }

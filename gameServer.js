@@ -42,7 +42,7 @@ class GameServer {
       id: p.id, name: p.name, x: p.x, y: p.y,
       direction: p.direction, moving: p.moving, vx: p.vx, vy: p.vy,
       aimDirX: p.aimDirX, aimDirY: p.aimDirY,
-      health: p.health, maxHealth: p.maxHealth, alive: p.alive,
+      health: p.health, maxHealth: p.maxHealth, alive: p.alive, downed: p.downed === true,
       weaponId: p.activeWeaponId,
     };
   }
@@ -53,7 +53,9 @@ class GameServer {
     return {
       id: p.id,
       health: p.health, maxHealth: p.maxHealth, alive: p.alive,
-      kills: p.kills, headshots: p.headshots, money: p.money,
+      kills: p.kills, headshots: p.headshots, revives: p.revives || 0, money: p.money,
+      downed: p.downed === true, bleedOutEndAt: p.bleedOutEndAt || 0,
+      bleedOutRemainingMs: p.downed ? Math.max(0, (p.bleedOutEndAt || 0) - Date.now()) : 0,
       slots: [...p.slots], activeSlot: p.activeSlot, activeWeaponId: p.activeWeaponId,
       ammo: active.ammo, reserve: active.reserve,
       weapons: Object.fromEntries(Object.entries(p.weapons).map(([id, s]) => [id, { id, ammo: s.ammo, reserve: s.reserve }])),
@@ -92,6 +94,8 @@ class GameServer {
       socket.on('loot:pickup', (data, ack) => this._safe(ack, () => this._handleLootPickup(socket, data, ack)));
       socket.on('shop:buy', (data, ack) => this._safe(ack, () => this._handleShopBuy(socket, data, ack)));
       socket.on('world:interact', (data, ack) => this._safe(ack, () => this._handleWorldInteract(socket, data, ack)));
+      socket.on('player:revive:start', (data, ack) => this._safe(ack, () => this._handleReviveStart(socket, data, ack)));
+      socket.on('player:revive:cancel', (data, ack) => this._safe(ack, () => this._handleReviveCancel(socket, data, ack)));
       socket.on('player:respawn', (_data, ack) => this._safe(ack, () => this._handleRespawn(socket, ack)));
       socket.on('player:leave', () => this._handleLeave(socket));
       socket.on('disconnect', () => this._handleLeave(socket));
@@ -115,8 +119,9 @@ class GameServer {
       id: socket.id, socketId: socket.id, name,
       x: spawn.x, y: spawn.y, direction: 'down', moving: false, vx: 0, vy: 0,
       aimDirX: 0, aimDirY: 1,
-      health: 100, maxHealth: 100, alive: true,
-      kills: 0, headshots: 0, money: 0,
+      health: 100, maxHealth: 100, alive: true, downed: false,
+      bleedOutEndAt: 0, reviveBy: null, reviveStartedAt: 0,
+      kills: 0, headshots: 0, revives: 0, money: 0,
       weapons: { pistol }, slots: ['pistol'], activeSlot: 0, activeWeaponId: 'pistol',
       upgrades: { damage: 0, reload: 0, movement: 0 },
       lastShotAt: 0, reloadEndAt: 0, reloadWeaponId: null,
@@ -141,7 +146,7 @@ class GameServer {
 
   _handleState(socket, data) {
     const p = this.players.get(socket.id);
-    if (!p || !data || !p.alive) return;
+    if (!p || !data || !p.alive || p.downed) return;
     const x = Number(data.x), y = Number(data.y);
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
     const now = Date.now();
@@ -187,7 +192,7 @@ class GameServer {
 
   _handleReload(socket, ack) {
     const p = this.players.get(socket.id);
-    if (!p || !p.alive) return ack && ack({ success: false, error: 'invalid_player' });
+    if (!p || !p.alive || p.downed) return ack && ack({ success: false, error: 'invalid_player' });
     this._finishReloadIfDue(p);
     const state = p.weapons[p.activeWeaponId], weapon = getWeapon(p.activeWeaponId);
     if (!state || state.ammo >= weapon.magazineSize || state.reserve <= 0) return ack && ack({ success: false, error: 'reload_not_needed', self: this._selfSnapshot(p) });
@@ -202,7 +207,7 @@ class GameServer {
 
   _handleSwitch(socket, data, ack) {
     const p = this.players.get(socket.id);
-    if (!p || !p.alive) return ack && ack({ success: false, error: 'invalid_player' });
+    if (!p || !p.alive || p.downed) return ack && ack({ success: false, error: 'invalid_player' });
     let slot = Number(data?.slot);
     if (!Number.isInteger(slot)) slot = (p.activeSlot + 1) % p.slots.length;
     if (slot < 0 || slot >= p.slots.length) return ack && ack({ success: false, error: 'invalid_slot' });
@@ -218,7 +223,7 @@ class GameServer {
 
   _handleShoot(socket, _data, ack) {
     const p = this.players.get(socket.id);
-    if (!p || !p.alive) return ack && ack({ success: false, error: 'invalid_player' });
+    if (!p || !p.alive || p.downed) return ack && ack({ success: false, error: 'invalid_player' });
     this._finishReloadIfDue(p);
     if (p.reloadEndAt > Date.now()) return ack && ack({ success: false, error: 'reloading', self: this._selfSnapshot(p) });
 
@@ -304,7 +309,7 @@ class GameServer {
 
   _handleLootPickup(socket, data, ack) {
     const p = this.players.get(socket.id);
-    if (!p) return ack && ack({ success: false, error: 'invalid_player' });
+    if (!p || !p.alive || p.downed) return ack && ack({ success: false, error: 'invalid_player' });
     const result = this.lootSystem.pickup(p, data?.lootId);
     if (!result.success) return ack && ack(result);
     this.io.emit('loot:removed', Number(result.item.id));
@@ -334,7 +339,7 @@ class GameServer {
 
   _handleShopBuy(socket, data, ack) {
     const p = this.players.get(socket.id);
-    if (!p) return ack && ack({ success: false, error: 'invalid_player' });
+    if (!p || !p.alive || p.downed) return ack && ack({ success: false, error: 'invalid_player' });
     if (this.roundSystem.state !== 'intermission') return ack && ack({ success: false, error: 'shop_closed' });
     const itemId = String(data?.itemId || '');
     let price = 0;
@@ -374,7 +379,7 @@ class GameServer {
 
   _handleWorldInteract(socket, data, ack) {
     const p = this.players.get(socket.id);
-    if (!p) return ack && ack({ success:false, error:'invalid_player' });
+    if (!p || !p.alive || p.downed) return ack && ack({ success:false, error:'invalid_player' });
     const result = this.interactionSystem.interact(p, data?.id);
     if (!result.success) return ack && ack({ ...result, self:this._selfSnapshot(p) });
     worldMap.setDynamicObstacles(this.interactionSystem.getBlockingObstacles());
@@ -384,12 +389,103 @@ class GameServer {
     ack && ack({ success:true, item:result.item, reward:result.reward, self });
   }
 
+  _distancePlayers(a, b) {
+    const ax = a.x + config.PLAYER_COLLISION_RADIUS;
+    const ay = a.y + config.PLAYER_COLLISION_RADIUS;
+    const bx = b.x + config.PLAYER_COLLISION_RADIUS;
+    const by = b.y + config.PLAYER_COLLISION_RADIUS;
+    return Math.hypot(ax - bx, ay - by);
+  }
+
+  _handleReviveStart(socket, data, ack) {
+    const reviver = this.players.get(socket.id);
+    const target = this.players.get(String(data?.targetId || ''));
+    if (!reviver || !reviver.alive || reviver.downed) return ack && ack({success:false,error:'invalid_reviver'});
+    if (!target || !target.alive || !target.downed) return ack && ack({success:false,error:'invalid_target'});
+    if (target.id === reviver.id) return ack && ack({success:false,error:'invalid_target'});
+    if (this._distancePlayers(reviver, target) > config.REVIVE_RANGE) return ack && ack({success:false,error:'too_far'});
+    if (target.reviveBy && target.reviveBy !== reviver.id) return ack && ack({success:false,error:'already_reviving'});
+
+    target.reviveBy = reviver.id;
+    target.reviveStartedAt = Date.now();
+    const evt = { targetId:target.id, reviverId:reviver.id, startedAt:target.reviveStartedAt, durationMs:config.REVIVE_DURATION_MS };
+    this.io.emit('player:revive:start', evt);
+    ack && ack({success:true, ...evt});
+  }
+
+  _cancelRevive(target, reason='cancelled') {
+    if (!target?.reviveBy) return;
+    const evt = {targetId:target.id, reviverId:target.reviveBy, reason};
+    target.reviveBy = null;
+    target.reviveStartedAt = 0;
+    this.io.emit('player:revive:cancel', evt);
+  }
+
+  _handleReviveCancel(socket, data, ack) {
+    const target = this.players.get(String(data?.targetId || ''));
+    if (!target || target.reviveBy !== socket.id) return ack && ack({success:false,error:'not_reviving'});
+    this._cancelRevive(target, 'released');
+    ack && ack({success:true});
+  }
+
+  _completeRevive(target, reviver) {
+    if (!target || !reviver || !target.downed) return;
+    target.downed = false;
+    target.health = Math.max(1, Math.round(target.maxHealth * config.REVIVE_HEALTH_RATIO));
+    target.bleedOutEndAt = 0;
+    target.reviveBy = null;
+    target.reviveStartedAt = 0;
+    reviver.revives = (reviver.revives || 0) + 1;
+    reviver.money += config.REVIVE_REWARD;
+
+    const evt = {playerId:target.id, reviverId:reviver.id, health:target.health, maxHealth:target.maxHealth, reward:config.REVIVE_REWARD};
+    this.io.emit('player:revived', evt);
+    this.io.emit('player:update', this._publicPlayerSnapshot(target));
+    this.io.emit('player:update', this._publicPlayerSnapshot(reviver));
+    this._emitSelf(target);
+    this._emitSelf(reviver);
+  }
+
+  _downPlayer(p) {
+    if (!p || p.downed || !p.alive) return;
+    p.health = 0;
+    p.downed = true;
+    p.bleedOutEndAt = Date.now() + config.BLEEDOUT_MS;
+    p.reviveBy = null;
+    p.reviveStartedAt = 0;
+    p.reloadEndAt = 0;
+    p.reloadWeaponId = null;
+    const evt = {playerId:p.id, bleedOutEndAt:p.bleedOutEndAt, bleedOutMs:config.BLEEDOUT_MS};
+    this.io.emit('player:downed', evt);
+    this.io.emit('player:update', this._publicPlayerSnapshot(p));
+    this._emitSelf(p);
+  }
+
+  _killPlayer(p, reason='damage') {
+    if (!p) return;
+    if (p.reviveBy) this._cancelRevive(p, 'target_dead');
+    p.health = 0;
+    p.alive = false;
+    p.downed = false;
+    p.bleedOutEndAt = 0;
+    p.reviveBy = null;
+    p.reviveStartedAt = 0;
+    p.reloadEndAt = 0;
+    p.reloadWeaponId = null;
+    const socket = this.io.sockets.sockets.get(p.socketId);
+    if (socket) socket.emit('player:death', {reason});
+    this.io.emit('player:update', this._publicPlayerSnapshot(p));
+    this._emitSelf(p);
+  }
+
   _handleRespawn(socket, ack) {
     const p = this.players.get(socket.id);
     if (!p) return ack && ack({ success: false, error: 'invalid_player' });
+    if (p.downed) return ack && ack({ success:false, error:'still_downed', self:this._selfSnapshot(p) });
     if (!p.alive) {
       const spawn = this._pickPlayerSpawn();
-      p.x = spawn.x; p.y = spawn.y; p.health = p.maxHealth; p.alive = true;
+      p.x = spawn.x; p.y = spawn.y; p.health = p.maxHealth; p.alive = true; p.downed = false;
+      p.bleedOutEndAt = 0; p.reviveBy = null; p.reviveStartedAt = 0;
       p.lastStateAt = Date.now(); p.reloadEndAt = 0; p.reloadWeaponId = null;
     }
     ack && ack({ success: true, player: { x: p.x, y: p.y, health: p.health, maxHealth: p.maxHealth, alive: true }, self: this._selfSnapshot(p) });
@@ -399,17 +495,26 @@ class GameServer {
   _handleLeave(socket) {
     const p = this.players.get(socket.id);
     if (!p) return;
+    for (const target of this.players.values()) {
+      if (target.reviveBy === p.id) this._cancelRevive(target, 'reviver_left');
+    }
+    if (p.reviveBy) this._cancelRevive(p, 'target_left');
     this.players.delete(socket.id);
     socket.broadcast.emit('player:left', p.id);
   }
 
   _applyZombieDamageToPlayer(playerId, amount) {
     const p = this.players.get(playerId);
-    if (!p || !p.alive) return;
+    if (!p || !p.alive || p.downed) return;
     p.health = Math.max(0, p.health - Math.max(0, Number(amount) || 0));
     const socket = this.io.sockets.sockets.get(p.socketId);
     if (socket) socket.emit('player:damage', { health: p.health, maxHealth: p.maxHealth, amount });
-    if (p.health <= 0) { p.alive = false; p.reloadEndAt = 0; if (socket) socket.emit('player:death', {}); }
+    if (p.health <= 0) {
+      const hasTeammate = [...this.players.values()].some(o => o.id !== p.id && o.alive && !o.downed);
+      if (hasTeammate) this._downPlayer(p);
+      else this._killPlayer(p, 'damage');
+      return;
+    }
     this.io.emit('player:update', this._publicPlayerSnapshot(p));
   }
 
@@ -427,7 +532,23 @@ class GameServer {
       }
     }
 
-    const alivePlayers = [...this.players.values()].filter(p => p.alive).map(p => ({ id: p.id, x: p.x + config.PLAYER_COLLISION_RADIUS, y: p.y + config.PLAYER_COLLISION_RADIUS }));
+    for (const p of this.players.values()) {
+      if (!p.downed) continue;
+      if (p.bleedOutEndAt && now >= p.bleedOutEndAt) {
+        this._killPlayer(p, 'bleedout');
+        continue;
+      }
+      if (p.reviveBy) {
+        const reviver = this.players.get(p.reviveBy);
+        if (!reviver || !reviver.alive || reviver.downed || this._distancePlayers(reviver, p) > config.REVIVE_RANGE) {
+          this._cancelRevive(p, 'interrupted');
+        } else if (now - p.reviveStartedAt >= config.REVIVE_DURATION_MS) {
+          this._completeRevive(p, reviver);
+        }
+      }
+    }
+
+    const alivePlayers = [...this.players.values()].filter(p => p.alive && !p.downed).map(p => ({ id: p.id, x: p.x + config.PLAYER_COLLISION_RADIUS, y: p.y + config.PLAYER_COLLISION_RADIUS }));
     let roundChanged = false;
     this.roundSystem.tick(dt, this.players.size, () => { roundChanged = true; });
     if (roundChanged && this.interactionSystem.onRoundState(this.roundSystem.getState())) {

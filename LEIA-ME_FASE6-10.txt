@@ -1,7 +1,18 @@
-FASES 6–10 — SERVIDOR
+FASES 6–10
 
-Substitua os arquivos do repositório zombie-survival-server, rode npm install e npm start.
-Depois faça git add ., git commit e git push para o Render.
+CLIENTE: envie o conteúdo deste ZIP para htdocs no InfinityFree.
+SERVIDOR: use o ZIP separado do Render/GitHub.
 
-Novo arquivo importante: interactions.js
-Não é necessário SQL novo.
+Controles PC:
+WASD = mover
+Mouse = mirar / clique = atirar
+R = recarregar
+1/2 = trocar arma
+E = interagir
+F = pegar loot
+B = loja entre rounds
+
+Mobile:
+Joystick esquerdo = mover
+Joystick direito = mirar/atirar
+Botões: recarga, arma, usar, pegar e loja.
