@@ -19,6 +19,7 @@
  *   player:left    (broadcast, não-volatile) -> alguém saiu
  *   player:damage  (para o próprio jogador, não-volatile)
  *   player:death   (para o próprio jogador, não-volatile)
+ *   player:shot    (broadcast, não-volatile) -> VFX do tiro remoto
  *
  *   zombies:snapshot (broadcast, volatile)     -> 10Hz
  *   round:state      (broadcast, não-volatile) -> 1Hz + em transições
@@ -239,35 +240,74 @@ class GameServer {
     const dirX = player.aimDirX / dirLen;
     const dirY = player.aimDirY / dirLen;
 
-    player.lastShotAt = now; // consome o cooldown mesmo se errar (item 33/51)
+    player.lastShotAt = now;
 
-    const wallDistance = worldMap.raycastDistanceToObstacle(player.x, player.y, dirX, dirY, config.MAX_SHOOT_DISTANCE);
-    const hitZombie = this.zombieSystem.findHitZombie(player.x, player.y, dirX, dirY, config.MAX_SHOOT_DISTANCE, wallDistance);
+    // Player.x/y representam o canto superior esquerdo do sprite no
+    // cliente. O tiro nasce do centro para coincidir com o visual.
+    const originX = player.x + config.PLAYER_COLLISION_RADIUS;
+    const originY = player.y + config.PLAYER_COLLISION_RADIUS;
 
-    if (!hitZombie) {
-      ack && ack({
-        success: true,
-        hit: false,
-        wallBlocked: wallDistance !== null,
-        zombieId: null,
-        zombieHealth: null,
-        zombieDead: false,
-        kills: player.kills,
-      });
-      return;
+    const wallDistance = worldMap.raycastDistanceToObstacle(
+      originX, originY, dirX, dirY, config.MAX_SHOOT_DISTANCE
+    );
+    const hitZombie = this.zombieSystem.findHitZombie(
+      originX, originY, dirX, dirY, config.MAX_SHOOT_DISTANCE, wallDistance
+    );
+
+    let hit = false;
+    let zombieId = null;
+    let zombieHealth = null;
+    let zombieDead = false;
+    let endDistance = wallDistance ?? config.MAX_SHOOT_DISTANCE;
+
+    if (hitZombie) {
+      const projection = worldMap.pointDistanceToRay(
+        hitZombie.x, hitZombie.y,
+        originX, originY,
+        dirX, dirY,
+        config.MAX_SHOOT_DISTANCE
+      );
+
+      endDistance = Math.max(0, Math.min(config.MAX_SHOOT_DISTANCE, projection.distanceAlongRay));
+
+      const result = this.zombieSystem.applyDamage(hitZombie.id, config.PISTOL_DAMAGE);
+      hit = true;
+      zombieId = hitZombie.id;
+      zombieHealth = result ? result.health : 0;
+      zombieDead = !!(result && result.died);
+
+      if (zombieDead) player.kills++;
     }
 
-    const result = this.zombieSystem.applyDamage(hitZombie.id, config.PISTOL_DAMAGE);
-    if (result && result.died) player.kills++;
+    const shot = {
+      shotId: `${socket.id}:${now}`,
+      playerId: player.id,
+      x: originX,
+      y: originY,
+      dirX,
+      dirY,
+      endX: originX + dirX * endDistance,
+      endY: originY + dirY * endDistance,
+      wallBlocked: !hit && wallDistance !== null,
+      hit,
+      zombieId,
+      zombieDead,
+      timestamp: now,
+    };
+
+    // Evento visual para os OUTROS clientes. O atirador já reproduz
+    // o tiro imediatamente para não adicionar ping ao feedback local.
+    socket.broadcast.emit('player:shot', shot);
 
     ack && ack({
       success: true,
-      hit: true,
-      wallBlocked: false,
-      zombieId: hitZombie.id,
-      zombieHealth: result ? result.health : 0,
-      zombieDead: result ? result.died : false,
+      hit,
+      wallBlocked: shot.wallBlocked,
+      zombieId,
+      zombieHealth,
+      zombieDead,
       kills: player.kills,
+      shot,
     });
   }
 
