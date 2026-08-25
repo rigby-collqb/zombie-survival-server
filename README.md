@@ -1,8 +1,5 @@
-Zombie Survival Online — Servidor Fase 5
+# Zombie Survival Online — Fases 6–10
 
-Servidor Node.js/Socket.IO autoritativo para Render.
-Controla jogadores, armas, munição, reload, dano, headshots, zumbis, rounds, loot, dinheiro, loja e upgrades.
+Servidor Node/Socket.IO autoritativo.
 
-Executar:
-  npm install
-  npm start
+Novidades: interações sincronizadas, colisão dinâmica de portas/portões/barricadas e mapa atualizado.

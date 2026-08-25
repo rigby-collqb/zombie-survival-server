@@ -1,0 +1,7 @@
+FASES 6–10 — SERVIDOR
+
+Substitua os arquivos do repositório zombie-survival-server, rode npm install e npm start.
+Depois faça git add ., git commit e git push para o Render.
+
+Novo arquivo importante: interactions.js
+Não é necessário SQL novo.

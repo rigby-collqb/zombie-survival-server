@@ -4,6 +4,7 @@ const ZombieSystem = require('./zombies');
 const RoundSystem = require('./rounds');
 const { LootSystem } = require('./loot');
 const { WEAPONS, SHOP, getWeapon, createWeaponState } = require('./weapons');
+const InteractionSystem = require('./interactions');
 
 class GameServer {
   constructor(io) {
@@ -12,6 +13,8 @@ class GameServer {
     this.zombieSystem = new ZombieSystem();
     this.roundSystem = new RoundSystem(this.zombieSystem);
     this.lootSystem = new LootSystem();
+    this.interactionSystem = new InteractionSystem();
+    worldMap.setDynamicObstacles(this.interactionSystem.getBlockingObstacles());
     this._snapshotAccumulatorMs = 0;
     this._roundAccumulatorMs = 0;
     this._lootAccumulatorMs = 0;
@@ -88,6 +91,7 @@ class GameServer {
       socket.on('player:switch', (data, ack) => this._safe(ack, () => this._handleSwitch(socket, data, ack)));
       socket.on('loot:pickup', (data, ack) => this._safe(ack, () => this._handleLootPickup(socket, data, ack)));
       socket.on('shop:buy', (data, ack) => this._safe(ack, () => this._handleShopBuy(socket, data, ack)));
+      socket.on('world:interact', (data, ack) => this._safe(ack, () => this._handleWorldInteract(socket, data, ack)));
       socket.on('player:respawn', (_data, ack) => this._safe(ack, () => this._handleRespawn(socket, ack)));
       socket.on('player:leave', () => this._handleLeave(socket));
       socket.on('disconnect', () => this._handleLeave(socket));
@@ -130,6 +134,7 @@ class GameServer {
       loot: this.lootSystem.getSnapshot(),
       round: this.roundSystem.getState(),
       shop: this._shopCatalog(),
+      interactions: this.interactionSystem.getSnapshot(),
     });
     socket.broadcast.emit('player:joined', this._publicPlayerSnapshot(p));
   }
@@ -148,8 +153,15 @@ class GameServer {
       const ratio = maxDistance / requested;
       fx = p.x + (x - p.x) * ratio; fy = p.y + (y - p.y) * ratio;
     }
-    p.x = Math.max(0, Math.min(config.WORLD_WIDTH, fx));
-    p.y = Math.max(0, Math.min(config.WORLD_HEIGHT, fy));
+    fx = Math.max(0, Math.min(config.WORLD_WIDTH - config.PLAYER_COLLISION_RADIUS * 2, fx));
+    fy = Math.max(0, Math.min(config.WORLD_HEIGHT - config.PLAYER_COLLISION_RADIUS * 2, fy));
+    const oldCx = p.x + config.PLAYER_COLLISION_RADIUS;
+    const oldCy = p.y + config.PLAYER_COLLISION_RADIUS;
+    const targetCx = fx + config.PLAYER_COLLISION_RADIUS;
+    const targetCy = fy + config.PLAYER_COLLISION_RADIUS;
+    const resolved = worldMap.resolveCircleMovement(oldCx, oldCy, targetCx, targetCy, config.PLAYER_COLLISION_RADIUS);
+    p.x = resolved.x - config.PLAYER_COLLISION_RADIUS;
+    p.y = resolved.y - config.PLAYER_COLLISION_RADIUS;
     p.direction = typeof data.direction === 'string' ? data.direction : p.direction;
     p.moving = data.moving === true;
     p.vx = Number.isFinite(Number(data.vx)) ? Number(data.vx) : 0;
@@ -360,6 +372,18 @@ class GameServer {
     ack && ack({ success: true, self });
   }
 
+  _handleWorldInteract(socket, data, ack) {
+    const p = this.players.get(socket.id);
+    if (!p) return ack && ack({ success:false, error:'invalid_player' });
+    const result = this.interactionSystem.interact(p, data?.id);
+    if (!result.success) return ack && ack({ ...result, self:this._selfSnapshot(p) });
+    worldMap.setDynamicObstacles(this.interactionSystem.getBlockingObstacles());
+    this.io.emit('world:interaction', result.item);
+    const self = this._selfSnapshot(p);
+    this._emitSelf(p);
+    ack && ack({ success:true, item:result.item, reward:result.reward, self });
+  }
+
   _handleRespawn(socket, ack) {
     const p = this.players.get(socket.id);
     if (!p) return ack && ack({ success: false, error: 'invalid_player' });
@@ -406,6 +430,10 @@ class GameServer {
     const alivePlayers = [...this.players.values()].filter(p => p.alive).map(p => ({ id: p.id, x: p.x + config.PLAYER_COLLISION_RADIUS, y: p.y + config.PLAYER_COLLISION_RADIUS }));
     let roundChanged = false;
     this.roundSystem.tick(dt, this.players.size, () => { roundChanged = true; });
+    if (roundChanged && this.interactionSystem.onRoundState(this.roundSystem.getState())) {
+      worldMap.setDynamicObstacles(this.interactionSystem.getBlockingObstacles());
+      this.io.emit('world:interactions', this.interactionSystem.getSnapshot());
+    }
 
     if (this.roundSystem.state === 'running') {
       this.zombieSystem.tick(dt, alivePlayers,

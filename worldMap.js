@@ -18,6 +18,7 @@ const fs = require('fs');
 const path = require('path');
 
 let obstacles = [];
+let dynamicObstacles = [];
 
 try {
   const raw = fs.readFileSync(path.join(__dirname, 'data', 'world_obstacles.json'), 'utf8');
@@ -29,7 +30,15 @@ try {
 }
 
 function getObstacles() {
-  return obstacles;
+  return [...obstacles, ...dynamicObstacles];
+}
+
+function setDynamicObstacles(items) {
+  dynamicObstacles = Array.isArray(items) ? items.filter(Boolean) : [];
+}
+
+function allObstacles() {
+  return dynamicObstacles.length ? [...obstacles, ...dynamicObstacles] : obstacles;
 }
 
 /** Mesmo teste AABB de js/collision.js / api/world_map.php. */
@@ -44,7 +53,7 @@ function rectsIntersect(a, b) {
 
 /** Círculo x obstáculos sólidos (usado para spawn e ataque). */
 function circleHitsAnyObstacle(cx, cy, radius) {
-  for (const o of obstacles) {
+  for (const o of allObstacles()) {
     const rectX = o.x - radius;
     const rectY = o.y - radius;
     const rectW = o.width + radius * 2;
@@ -62,7 +71,7 @@ function resolveCircleMovement(x, y, nextX, nextY, radius) {
   const rectAt = (px, py) => ({ x: px - radius, y: py - radius, width: d, height: d });
 
   const hitsAny = (rect) => {
-    for (const o of obstacles) {
+    for (const o of allObstacles()) {
       if (rectsIntersect(rect, o)) return true;
     }
     return false;
@@ -83,7 +92,7 @@ function raycastDistanceToObstacle(ox, oy, dx, dy, maxDistance) {
   for (let traveled = 0; traveled <= maxDistance; traveled += step) {
     const px = ox + dx * traveled;
     const py = oy + dy * traveled;
-    for (const o of obstacles) {
+    for (const o of allObstacles()) {
       if (px >= o.x && px <= o.x + o.width && py >= o.y && py <= o.y + o.height) {
         return traveled;
       }
@@ -106,6 +115,7 @@ function pointDistanceToRay(px, py, ox, oy, dx, dy, maxDistance) {
 
 module.exports = {
   getObstacles,
+  setDynamicObstacles,
   circleHitsAnyObstacle,
   resolveCircleMovement,
   raycastDistanceToObstacle,

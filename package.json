@@ -1,7 +1,7 @@
 {
   "name": "zombie-survival-server",
-  "version": "5.0.0",
-  "description": "Servidor autoritativo do Zombie Survival Online - Fase 5 (armas, zombies especiais, headshots, loot e loja)",
+  "version": "10.0.0",
+  "description": "Servidor autoritativo do Zombie Survival Online - Fases 6-10 (HUD, VFX, audio, mapa e interacoes)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
