@@ -1,587 +1,262 @@
 const config = require('./config');
-const worldMap = require('./worldMap');
-const ZombieSystem = require('./zombies');
-const RoundSystem = require('./rounds');
-const { LootSystem } = require('./loot');
-const { WEAPONS, SHOP, getWeapon, createWeaponState } = require('./weapons');
-const InteractionSystem = require('./interactions');
+const AccountStore = require('./accounts');
+const RoomGame = require('./roomGame');
+
+const MAPS = Object.freeze([
+  { id:'city', name:'Cidade Abandonada', description:'Visual padrão e equilibrado.' },
+  { id:'night', name:'Cidade à Noite', description:'Tema escuro, iluminação e VFX mais fortes.' },
+  { id:'fog', name:'Zona de Névoa', description:'Atmosfera de neblina e visibilidade reduzida.' },
+]);
 
 class GameServer {
   constructor(io) {
     this.io = io;
-    this.players = new Map();
-    this.zombieSystem = new ZombieSystem();
-    this.roundSystem = new RoundSystem(this.zombieSystem);
-    this.lootSystem = new LootSystem();
-    this.interactionSystem = new InteractionSystem();
-    worldMap.setDynamicObstacles(this.interactionSystem.getBlockingObstacles());
-    this._snapshotAccumulatorMs = 0;
-    this._roundAccumulatorMs = 0;
-    this._lootAccumulatorMs = 0;
-    this._bindSocketEvents();
-    this._startLoop();
+    this.accounts = new AccountStore();
+    this.rooms = new Map();
+    this._cleanupTimer = setInterval(() => this._cleanupRooms(), 30000);
+    this._bind();
   }
 
-  _pickPlayerSpawn() {
-    for (let attempt = 0; attempt < 30; attempt++) {
-      const a = Math.random() * Math.PI * 2;
-      const r = Math.random() * config.SPAWN_RADIUS;
-      const x = Math.max(40, Math.min(config.WORLD_WIDTH - 40, config.SPAWN_CENTER_X + Math.cos(a) * r));
-      const y = Math.max(40, Math.min(config.WORLD_HEIGHT - 40, config.SPAWN_CENTER_Y + Math.sin(a) * r));
-      if (!worldMap.circleHitsAnyObstacle(x, y, config.PLAYER_COLLISION_RADIUS + 10)) return { x, y };
+  status() {
+    let players = 0, activeRooms = 0;
+    for (const r of this.rooms.values()) {
+      players += r.members.size;
+      if (r.started) activeRooms++;
     }
-    return { x: config.SPAWN_CENTER_X, y: config.SPAWN_CENTER_Y };
-  }
-
-  _playerSpeed(p) {
-    return config.PLAYER_SPEED * (1 + p.upgrades.movement * config.MOVEMENT_UPGRADE_PER_LEVEL);
-  }
-
-  _publicPlayerSnapshot(p) {
-    return {
-      id: p.id, name: p.name, x: p.x, y: p.y,
-      direction: p.direction, moving: p.moving, vx: p.vx, vy: p.vy,
-      aimDirX: p.aimDirX, aimDirY: p.aimDirY,
-      health: p.health, maxHealth: p.maxHealth, alive: p.alive, downed: p.downed === true,
-      weaponId: p.activeWeaponId,
-    };
-  }
-
-  _selfSnapshot(p) {
-    this._finishReloadIfDue(p);
-    const active = p.weapons[p.activeWeaponId] || createWeaponState('pistol');
-    return {
-      id: p.id,
-      health: p.health, maxHealth: p.maxHealth, alive: p.alive,
-      kills: p.kills, headshots: p.headshots, revives: p.revives || 0, money: p.money,
-      downed: p.downed === true, bleedOutEndAt: p.bleedOutEndAt || 0,
-      bleedOutRemainingMs: p.downed ? Math.max(0, (p.bleedOutEndAt || 0) - Date.now()) : 0,
-      slots: [...p.slots], activeSlot: p.activeSlot, activeWeaponId: p.activeWeaponId,
-      ammo: active.ammo, reserve: active.reserve,
-      weapons: Object.fromEntries(Object.entries(p.weapons).map(([id, s]) => [id, { id, ammo: s.ammo, reserve: s.reserve }])),
-      upgrades: { ...p.upgrades },
-      reloading: p.reloadEndAt > Date.now(),
-      reloadRemainingMs: Math.max(0, p.reloadEndAt - Date.now()),
-      speed: this._playerSpeed(p),
-    };
-  }
-
-  _emitSelf(p) {
-    const socket = this.io.sockets.sockets.get(p.socketId);
-    if (socket) socket.emit('player:self', this._selfSnapshot(p));
-  }
-
-  _shopCatalog() {
-    return {
-      weapons: Object.values(WEAPONS).filter(w => w.shopPrice > 0).map(w => ({ id: w.id, name: w.name, price: w.shopPrice, rarity: w.rarity })),
-      ammo: { id: 'ammo', name: 'Munição', price: SHOP.ammo },
-      health: { id: 'health', name: 'Kit médico', price: SHOP.health },
-      upgrades: {
-        damage: SHOP.upgrades.damage,
-        reload: SHOP.upgrades.reload,
-        movement: SHOP.upgrades.movement,
-      },
-    };
-  }
-
-  _bindSocketEvents() {
-    this.io.on('connection', socket => {
-      socket.on('player:join', (data, ack) => this._safe(ack, () => this._handleJoin(socket, data, ack)));
-      socket.on('player:state', data => { try { this._handleState(socket, data); } catch (e) { console.error('[state]', e); } });
-      socket.on('player:shoot', (data, ack) => this._safe(ack, () => this._handleShoot(socket, data, ack)));
-      socket.on('player:reload', (_data, ack) => this._safe(ack, () => this._handleReload(socket, ack)));
-      socket.on('player:switch', (data, ack) => this._safe(ack, () => this._handleSwitch(socket, data, ack)));
-      socket.on('loot:pickup', (data, ack) => this._safe(ack, () => this._handleLootPickup(socket, data, ack)));
-      socket.on('shop:buy', (data, ack) => this._safe(ack, () => this._handleShopBuy(socket, data, ack)));
-      socket.on('world:interact', (data, ack) => this._safe(ack, () => this._handleWorldInteract(socket, data, ack)));
-      socket.on('player:revive:start', (data, ack) => this._safe(ack, () => this._handleReviveStart(socket, data, ack)));
-      socket.on('player:revive:cancel', (data, ack) => this._safe(ack, () => this._handleReviveCancel(socket, data, ack)));
-      socket.on('player:respawn', (_data, ack) => this._safe(ack, () => this._handleRespawn(socket, ack)));
-      socket.on('player:leave', () => this._handleLeave(socket));
-      socket.on('disconnect', () => this._handleLeave(socket));
-      socket.on('ping:check', ack => ack && ack());
-    });
+    return { online:true, version:'20.0.0', rooms:this.rooms.size, activeRooms, players, accounts:this.accounts.accounts.size };
   }
 
   _safe(ack, fn) {
     try { fn(); } catch (err) {
-      console.error('[socket] erro:', err);
-      ack && ack({ success: false, error: 'server_error' });
+      console.error('[socket]', err);
+      ack?.({success:false,error:'server_error'});
     }
   }
 
-  _handleJoin(socket, data, ack) {
-    if (this.players.size >= config.MAX_PLAYERS) return ack && ack({ success: false, error: 'server_full' });
-    let name = String(data?.name || 'Sobrevivente').trim().slice(0, config.MAX_NAME_LENGTH) || 'Sobrevivente';
-    const spawn = this._pickPlayerSpawn();
-    const pistol = createWeaponState('pistol');
-    const p = {
-      id: socket.id, socketId: socket.id, name,
-      x: spawn.x, y: spawn.y, direction: 'down', moving: false, vx: 0, vy: 0,
-      aimDirX: 0, aimDirY: 1,
-      health: 100, maxHealth: 100, alive: true, downed: false,
-      bleedOutEndAt: 0, reviveBy: null, reviveStartedAt: 0,
-      kills: 0, headshots: 0, revives: 0, money: 0,
-      weapons: { pistol }, slots: ['pistol'], activeSlot: 0, activeWeaponId: 'pistol',
-      upgrades: { damage: 0, reload: 0, movement: 0 },
-      lastShotAt: 0, reloadEndAt: 0, reloadWeaponId: null,
-      lastStateAt: Date.now(),
-    };
-    this.players.set(socket.id, p);
+  _bind() {
+    this.io.on('connection', socket => {
+      socket.on('account:bootstrap', (data, ack) => this._safe(ack, () => this._accountBootstrap(socket, data, ack)));
+      socket.on('profile:select', (data, ack) => this._safe(ack, () => this._profileSelect(socket, data, ack)));
 
-    const others = [...this.players.values()].filter(o => o.id !== p.id).map(o => this._publicPlayerSnapshot(o));
-    ack && ack({
-      success: true,
-      player: this._publicPlayerSnapshot(p),
-      self: this._selfSnapshot(p),
-      players: others,
-      zombies: this.zombieSystem.getSnapshot(),
-      loot: this.lootSystem.getSnapshot(),
-      round: this.roundSystem.getState(),
-      shop: this._shopCatalog(),
-      interactions: this.interactionSystem.getSnapshot(),
-    });
-    socket.broadcast.emit('player:joined', this._publicPlayerSnapshot(p));
-  }
+      socket.on('lobby:create', (data, ack) => this._safe(ack, () => this._createLobby(socket, data, ack, false)));
+      socket.on('lobby:quick', (data, ack) => this._safe(ack, () => this._quickLobby(socket, data, ack)));
+      socket.on('lobby:join', (data, ack) => this._safe(ack, () => this._joinLobby(socket, data, ack)));
+      socket.on('lobby:resume', (data, ack) => this._safe(ack, () => this._resumeLobby(socket, data, ack)));
+      socket.on('lobby:leave', (_data, ack) => this._safe(ack, () => { this._leaveLobby(socket); ack?.({success:true}); }));
+      socket.on('lobby:ready', (data, ack) => this._safe(ack, () => this._readyLobby(socket, data, ack)));
+      socket.on('lobby:map', (data, ack) => this._safe(ack, () => this._setLobbyMap(socket, data, ack)));
+      socket.on('lobby:start', (_data, ack) => this._safe(ack, () => this._startLobby(socket, ack)));
 
-  _handleState(socket, data) {
-    const p = this.players.get(socket.id);
-    if (!p || !data || !p.alive || p.downed) return;
-    const x = Number(data.x), y = Number(data.y);
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-    const now = Date.now();
-    const dt = Math.max(0.02, Math.min((now - p.lastStateAt) / 1000, 2));
-    const maxDistance = this._playerSpeed(p) * dt * 1.8 + 40;
-    const requested = Math.hypot(x - p.x, y - p.y);
-    let fx = x, fy = y;
-    if (requested > maxDistance && requested > 0) {
-      const ratio = maxDistance / requested;
-      fx = p.x + (x - p.x) * ratio; fy = p.y + (y - p.y) * ratio;
-    }
-    fx = Math.max(0, Math.min(config.WORLD_WIDTH - config.PLAYER_COLLISION_RADIUS * 2, fx));
-    fy = Math.max(0, Math.min(config.WORLD_HEIGHT - config.PLAYER_COLLISION_RADIUS * 2, fy));
-    const oldCx = p.x + config.PLAYER_COLLISION_RADIUS;
-    const oldCy = p.y + config.PLAYER_COLLISION_RADIUS;
-    const targetCx = fx + config.PLAYER_COLLISION_RADIUS;
-    const targetCy = fy + config.PLAYER_COLLISION_RADIUS;
-    const resolved = worldMap.resolveCircleMovement(oldCx, oldCy, targetCx, targetCy, config.PLAYER_COLLISION_RADIUS);
-    p.x = resolved.x - config.PLAYER_COLLISION_RADIUS;
-    p.y = resolved.y - config.PLAYER_COLLISION_RADIUS;
-    p.direction = typeof data.direction === 'string' ? data.direction : p.direction;
-    p.moving = data.moving === true;
-    p.vx = Number.isFinite(Number(data.vx)) ? Number(data.vx) : 0;
-    p.vy = Number.isFinite(Number(data.vy)) ? Number(data.vy) : 0;
-    const ax = Number(data.aimDirX), ay = Number(data.aimDirY), len = Math.hypot(ax, ay);
-    if (Number.isFinite(ax) && Number.isFinite(ay) && len > 0.0001) { p.aimDirX = ax / len; p.aimDirY = ay / len; }
-    p.lastStateAt = now;
-    socket.volatile.broadcast.emit('player:update', this._publicPlayerSnapshot(p));
-  }
+      socket.on('player:join', (data, ack) => this._routeGame(socket, ack, g => g._handleJoin(socket, data, ack)));
+      socket.on('player:state', data => this._routeGameNoAck(socket, g => g._handleState(socket, data)));
+      socket.on('player:shoot', (data, ack) => this._routeGame(socket, ack, g => g._handleShoot(socket, data, ack)));
+      socket.on('player:reload', (_data, ack) => this._routeGame(socket, ack, g => g._handleReload(socket, ack)));
+      socket.on('player:switch', (data, ack) => this._routeGame(socket, ack, g => g._handleSwitch(socket, data, ack)));
+      socket.on('loot:pickup', (data, ack) => this._routeGame(socket, ack, g => g._handleLootPickup(socket, data, ack)));
+      socket.on('shop:buy', (data, ack) => this._routeGame(socket, ack, g => g._handleShopBuy(socket, data, ack)));
+      socket.on('world:interact', (data, ack) => this._routeGame(socket, ack, g => g._handleWorldInteract(socket, data, ack)));
+      socket.on('player:revive:start', (data, ack) => this._routeGame(socket, ack, g => g._handleReviveStart(socket, data, ack)));
+      socket.on('player:revive:cancel', (data, ack) => this._routeGame(socket, ack, g => g._handleReviveCancel(socket, data, ack)));
+      socket.on('player:respawn', (_data, ack) => this._routeGame(socket, ack, g => g._handleRespawn(socket, ack)));
+      socket.on('player:ping', data => this._routeGameNoAck(socket, g => g._handlePingReport(socket, data)));
+      socket.on('player:leave', () => this._routeGameNoAck(socket, g => g._handleLeave(socket, false)));
+      socket.on('ping:check', ack => ack?.({serverTime:Date.now()}));
 
-  _finishReloadIfDue(p) {
-    if (!p.reloadEndAt || Date.now() < p.reloadEndAt) return false;
-    const state = p.weapons[p.reloadWeaponId];
-    const weapon = getWeapon(p.reloadWeaponId);
-    if (state) {
-      const needed = Math.max(0, weapon.magazineSize - state.ammo);
-      const moved = Math.min(needed, state.reserve);
-      state.ammo += moved; state.reserve -= moved;
-    }
-    p.reloadEndAt = 0; p.reloadWeaponId = null;
-    return true;
-  }
-
-  _handleReload(socket, ack) {
-    const p = this.players.get(socket.id);
-    if (!p || !p.alive || p.downed) return ack && ack({ success: false, error: 'invalid_player' });
-    this._finishReloadIfDue(p);
-    const state = p.weapons[p.activeWeaponId], weapon = getWeapon(p.activeWeaponId);
-    if (!state || state.ammo >= weapon.magazineSize || state.reserve <= 0) return ack && ack({ success: false, error: 'reload_not_needed', self: this._selfSnapshot(p) });
-    if (p.reloadEndAt > Date.now()) return ack && ack({ success: false, error: 'already_reloading', self: this._selfSnapshot(p) });
-    const multiplier = Math.max(0.65, 1 - p.upgrades.reload * config.RELOAD_UPGRADE_PER_LEVEL);
-    p.reloadEndAt = Date.now() + Math.round(weapon.reloadMs * multiplier);
-    p.reloadWeaponId = p.activeWeaponId;
-    const self = this._selfSnapshot(p);
-    socket.broadcast.emit('player:reload', { playerId: p.id, weaponId: p.activeWeaponId, durationMs: self.reloadRemainingMs });
-    ack && ack({ success: true, self });
-  }
-
-  _handleSwitch(socket, data, ack) {
-    const p = this.players.get(socket.id);
-    if (!p || !p.alive || p.downed) return ack && ack({ success: false, error: 'invalid_player' });
-    let slot = Number(data?.slot);
-    if (!Number.isInteger(slot)) slot = (p.activeSlot + 1) % p.slots.length;
-    if (slot < 0 || slot >= p.slots.length) return ack && ack({ success: false, error: 'invalid_slot' });
-    p.activeSlot = slot; p.activeWeaponId = p.slots[slot]; p.reloadEndAt = 0; p.reloadWeaponId = null;
-    this.io.emit('player:update', this._publicPlayerSnapshot(p));
-    ack && ack({ success: true, self: this._selfSnapshot(p) });
-  }
-
-  _spreadDirection(baseX, baseY, spread) {
-    const angle = Math.atan2(baseY, baseX) + (Math.random() - 0.5) * spread;
-    return { x: Math.cos(angle), y: Math.sin(angle) };
-  }
-
-  _handleShoot(socket, _data, ack) {
-    const p = this.players.get(socket.id);
-    if (!p || !p.alive || p.downed) return ack && ack({ success: false, error: 'invalid_player' });
-    this._finishReloadIfDue(p);
-    if (p.reloadEndAt > Date.now()) return ack && ack({ success: false, error: 'reloading', self: this._selfSnapshot(p) });
-
-    const weapon = getWeapon(p.activeWeaponId);
-    const state = p.weapons[p.activeWeaponId];
-    const now = Date.now();
-    if (!state) return ack && ack({ success: false, error: 'weapon_missing' });
-    if (now - p.lastShotAt < weapon.fireRateMs) return ack && ack({ success: false, error: 'fire_rate_exceeded', self: this._selfSnapshot(p) });
-    if (state.ammo <= 0) return ack && ack({ success: false, error: 'no_ammo', self: this._selfSnapshot(p) });
-
-    const len = Math.hypot(p.aimDirX, p.aimDirY);
-    if (len < 0.0001) return ack && ack({ success: false, error: 'invalid_direction' });
-    const baseX = p.aimDirX / len, baseY = p.aimDirY / len;
-    const originX = p.x + config.PLAYER_COLLISION_RADIUS;
-    const originY = p.y + config.PLAYER_COLLISION_RADIUS;
-    p.lastShotAt = now; state.ammo--;
-
-    const rays = [];
-    let hitAny = false, anyHeadshot = false, killed = false;
-    const killedIds = new Set();
-
-    for (let pellet = 0; pellet < weapon.pellets; pellet++) {
-      const dir = this._spreadDirection(baseX, baseY, weapon.spread);
-      const wallDistance = worldMap.raycastDistanceToObstacle(originX, originY, dir.x, dir.y, weapon.range);
-      const hit = this.zombieSystem.findHitZombie(originX, originY, dir.x, dir.y, weapon.range, wallDistance);
-      let endDistance = wallDistance ?? weapon.range;
-      let zombieId = null, headshot = false, zombieDead = false;
-
-      if (hit) {
-        endDistance = Math.max(0, Math.min(weapon.range, hit.distance));
-        zombieId = hit.zombie.id; headshot = hit.part === 'head';
-        const damageBoost = 1 + p.upgrades.damage * config.DAMAGE_UPGRADE_PER_LEVEL;
-        const damage = Math.round(weapon.damage * damageBoost * (headshot ? weapon.headshotMultiplier : 1));
-        const result = this.zombieSystem.applyDamage(zombieId, damage);
-        zombieDead = result?.died === true;
-        hitAny = true; anyHeadshot ||= headshot;
-        if (result?.died && !killedIds.has(zombieId)) {
-          killedIds.add(zombieId); killed = true; p.kills++;
-          if (headshot) p.headshots++;
-          p.money += (result.zombie.reward || config.KILL_REWARD) + (headshot ? config.HEADSHOT_BONUS : 0);
-          const drop = this.lootSystem.maybeDrop(result.zombie);
-          if (drop) this.io.emit('loot:spawn', { ...drop, createdAt: undefined });
-          if (result.zombie.type === 'exploder') this._explodeZombie(result.zombie);
-        }
-      }
-
-      rays.push({
-        x: originX, y: originY, dirX: dir.x, dirY: dir.y,
-        endX: originX + dir.x * endDistance, endY: originY + dir.y * endDistance,
-        wallBlocked: !hit && wallDistance !== null,
-        hit: !!hit, zombieId, headshot, zombieDead,
+      socket.on('disconnect', () => {
+        // _leaveLobby repassa disconnected=true ao RoomGame, que mantém
+        // o estado da partida por uma janela curta para reconexão.
+        this._leaveLobby(socket, true);
       });
+    });
+  }
+
+  _requireAccount(socket, ack) {
+    const account = socket.data?.account;
+    if (!account) { ack?.({success:false,error:'account_required'}); return null; }
+    const fresh = this.accounts.get(account.id);
+    if (!fresh) { ack?.({success:false,error:'account_required'}); return null; }
+    socket.data.account = fresh;
+    return fresh;
+  }
+
+  _accountBootstrap(socket, data, ack) {
+    const result = this.accounts.bootstrap(data || {});
+    if (result.success) socket.data.account = this.accounts.get(result.account.id);
+    ack?.({...result, maps:MAPS});
+  }
+
+  _profileSelect(socket, data, ack) {
+    const account = this._requireAccount(socket, ack); if (!account) return;
+    const result = this.accounts.select(account.id, data || {});
+    if (result.success) {
+      socket.data.account = this.accounts.get(account.id);
+      const room = this._roomOf(socket);
+      room?.game?.refreshPlayerProfile(socket, result.account);
+      this._broadcastLobby(room);
     }
-
-    const shot = { shotId: `${socket.id}:${now}`, playerId: p.id, weaponId: weapon.id, rays, timestamp: now };
-    socket.broadcast.emit('player:shot', shot);
-    const self = this._selfSnapshot(p);
-    ack && ack({ success: true, hit: hitAny, headshot: anyHeadshot, zombieDead: killed, kills: p.kills, headshots: p.headshots, money: p.money, shot, self });
+    ack?.(result);
   }
 
-  _explodeZombie(z) {
-    const radius = ZombieSystem.TYPES.exploder.explosionRadius;
-    for (const p of this.players.values()) {
-      if (!p.alive) continue;
-      const px = p.x + config.PLAYER_COLLISION_RADIUS, py = p.y + config.PLAYER_COLLISION_RADIUS;
-      const d = Math.hypot(px - z.x, py - z.y);
-      if (d <= radius) {
-        const scale = 1 - d / radius;
-        this._applyZombieDamageToPlayer(p.id, Math.max(8, Math.round(28 * scale)));
-      }
+  _code() {
+    const alphabet='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    for (let attempt=0; attempt<50; attempt++) {
+      let code=''; for(let i=0;i<config.LOBBY_CODE_LENGTH;i++)code+=alphabet[Math.floor(Math.random()*alphabet.length)];
+      if(!this.rooms.has(code))return code;
     }
-    this.io.emit('zombie:explode', { zombieId: z.id, x: z.x, y: z.y, radius });
+    return Math.random().toString(36).slice(2,2+config.LOBBY_CODE_LENGTH).toUpperCase();
   }
 
-  _handleZombieSpecial(evt) {
-    if (evt.type === 'spit') {
-      this._applyZombieDamageToPlayer(evt.player.id, evt.damage);
-      this.io.emit('zombie:spit', { zombieId: evt.zombie.id, x: evt.zombie.x, y: evt.zombie.y, targetX: evt.player.x, targetY: evt.player.y });
-    } else if (evt.type === 'explode') {
-      this._explodeZombie(evt.zombie);
+  _newRoom(socket, mapId='city', isPublic=false) {
+    const code=this._code();
+    const room={
+      code, mapId:MAPS.some(m=>m.id===mapId)?mapId:'city', public:isPublic,
+      hostSocketId:socket.id, members:new Map(), started:false, game:null,
+      createdAt:Date.now(), lastActivityAt:Date.now(),
+    };
+    this.rooms.set(code,room);
+    return room;
+  }
+
+  _member(socket, account, ready=false) {
+    return {socketId:socket.id,accountId:account.id,name:account.name,ready,level:account.level,skinId:account.selectedSkin,ping:null};
+  }
+
+  _roomSnapshot(room) {
+    if(!room)return null;
+    return {
+      code:room.code,mapId:room.mapId,hostId:room.hostSocketId,started:room.started,public:room.public,
+      maps:MAPS,
+      members:[...room.members.values()].map(m=>({...m,isHost:m.socketId===room.hostSocketId})),
+      canStart:room.members.size>0 && [...room.members.values()].every(m=>m.ready),
+    };
+  }
+
+  _broadcastLobby(room) {
+    if(!room)return;
+    room.lastActivityAt=Date.now();
+    this.io.to(`game:${room.code}`).emit('lobby:state',this._roomSnapshot(room));
+  }
+
+  _attachToRoom(socket, room, account, ready=false) {
+    const old=this._roomOf(socket);
+    if(old && old.code!==room.code)this._leaveLobby(socket);
+    socket.data.roomCode=room.code;
+    socket.join(`game:${room.code}`);
+    room.members.set(socket.id,this._member(socket,account,ready));
+    room.lastActivityAt=Date.now();
+    if(!room.hostSocketId)room.hostSocketId=socket.id;
+  }
+
+  _createLobby(socket, data, ack, isPublic=false) {
+    const account=this._requireAccount(socket,ack); if(!account)return;
+    const room=this._newRoom(socket,String(data?.mapId||'city'),isPublic);
+    this._attachToRoom(socket,room,account,false);
+    this._broadcastLobby(room);
+    ack?.({success:true,lobby:this._roomSnapshot(room)});
+  }
+
+  _quickLobby(socket, data, ack) {
+    const account=this._requireAccount(socket,ack); if(!account)return;
+    let room=[...this.rooms.values()].find(r=>r.public && r.members.size<Math.min(config.LOBBY_MAX_PLAYERS,4));
+    if(!room)room=this._newRoom(socket,String(data?.mapId||'city'),true);
+    this._attachToRoom(socket,room,account,true);
+    // Quick play entra numa sala pública existente (inclusive em andamento) ou cria uma nova.
+    if(!room.started){
+      room.started=true;
+      room.game=new RoomGame(this.io,room,this.accounts);
     }
+    this._broadcastLobby(room);
+    this.io.to(`game:${room.code}`).emit('lobby:started',{code:room.code,mapId:room.mapId});
+    ack?.({success:true,lobby:this._roomSnapshot(room),started:true});
   }
 
-  _handleLootPickup(socket, data, ack) {
-    const p = this.players.get(socket.id);
-    if (!p || !p.alive || p.downed) return ack && ack({ success: false, error: 'invalid_player' });
-    const result = this.lootSystem.pickup(p, data?.lootId);
-    if (!result.success) return ack && ack(result);
-    this.io.emit('loot:removed', Number(result.item.id));
-    const self = this._selfSnapshot(p);
-    this._emitSelf(p);
-    // Weapon loot can change the equipped weapon; broadcast so remote players
-    // update the gun shown in their hands immediately.
-    this.io.emit('player:update', this._publicPlayerSnapshot(p));
-    ack && ack({ success: true, item: result.item, self });
+  _joinLobby(socket, data, ack) {
+    const account=this._requireAccount(socket,ack); if(!account)return;
+    const code=String(data?.code||'').trim().toUpperCase();
+    const room=this.rooms.get(code);
+    if(!room)return ack?.({success:false,error:'room_not_found'});
+    if(room.started)return ack?.({success:false,error:'room_already_started'});
+    if(room.members.size>=config.LOBBY_MAX_PLAYERS)return ack?.({success:false,error:'room_full'});
+    this._attachToRoom(socket,room,account,false);
+    this._broadcastLobby(room);
+    ack?.({success:true,lobby:this._roomSnapshot(room)});
   }
 
-  _giveShopWeapon(p, weaponId) {
-    if (!WEAPONS[weaponId] || weaponId === 'pistol') return false;
-    if (p.weapons[weaponId]) {
-      p.activeSlot = p.slots.indexOf(weaponId); p.activeWeaponId = weaponId; return true;
-    }
-    p.weapons[weaponId] = createWeaponState(weaponId);
-    if (p.slots.length < config.MAX_WEAPON_SLOTS) {
-      p.slots.push(weaponId); p.activeSlot = p.slots.length - 1;
-    } else {
-      const old = p.slots[p.activeSlot];
-      if (old !== 'pistol') delete p.weapons[old];
-      p.slots[p.activeSlot] = weaponId;
-    }
-    p.activeWeaponId = weaponId; return true;
+
+  _resumeLobby(socket, data, ack) {
+    const account=this._requireAccount(socket,ack); if(!account)return;
+    const code=String(data?.code||'').trim().toUpperCase();
+    const room=this.rooms.get(code); if(!room)return ack?.({success:false,error:'room_not_found'});
+    if(room.members.size>=config.LOBBY_MAX_PLAYERS&&!room.members.has(socket.id))return ack?.({success:false,error:'room_full'});
+    this._attachToRoom(socket,room,account,true);
+    this._broadcastLobby(room);
+    if(room.started)this.io.to(socket.id).emit('lobby:started',{code:room.code,mapId:room.mapId});
+    ack?.({success:true,lobby:this._roomSnapshot(room),started:room.started});
   }
 
-  _handleShopBuy(socket, data, ack) {
-    const p = this.players.get(socket.id);
-    if (!p || !p.alive || p.downed) return ack && ack({ success: false, error: 'invalid_player' });
-    if (this.roundSystem.state !== 'intermission') return ack && ack({ success: false, error: 'shop_closed' });
-    const itemId = String(data?.itemId || '');
-    let price = 0;
-
-    if (WEAPONS[itemId] && WEAPONS[itemId].shopPrice > 0) {
-      if (p.weapons[itemId]) return ack && ack({ success: false, error: 'already_owned', self: this._selfSnapshot(p) });
-      price = WEAPONS[itemId].shopPrice;
-      if (p.money < price) return ack && ack({ success: false, error: 'not_enough_money' });
-      p.money -= price; this._giveShopWeapon(p, itemId);
-    } else if (itemId === 'ammo') {
-      price = SHOP.ammo;
-      if (p.money < price) return ack && ack({ success: false, error: 'not_enough_money' });
-      const w = getWeapon(p.activeWeaponId), s = p.weapons[p.activeWeaponId];
-      p.money -= price; s.reserve += Math.max(w.magazineSize * 3, Math.round(w.startingReserve * 0.5));
-    } else if (itemId === 'health') {
-      price = SHOP.health;
-      if (p.health >= p.maxHealth) return ack && ack({ success: false, error: 'health_full' });
-      if (p.money < price) return ack && ack({ success: false, error: 'not_enough_money' });
-      p.money -= price; p.health = p.maxHealth;
-    } else if (itemId.startsWith('upgrade:')) {
-      const key = itemId.split(':')[1];
-      if (!['damage', 'reload', 'movement'].includes(key)) return ack && ack({ success: false, error: 'invalid_item' });
-      const current = p.upgrades[key];
-      if (current >= config.MAX_UPGRADE_LEVEL) return ack && ack({ success: false, error: 'max_level' });
-      price = SHOP.upgrades[key][current + 1];
-      if (p.money < price) return ack && ack({ success: false, error: 'not_enough_money' });
-      p.money -= price; p.upgrades[key]++;
-    } else {
-      return ack && ack({ success: false, error: 'invalid_item' });
-    }
-
-    p.reloadEndAt = 0; p.reloadWeaponId = null;
-    this.io.emit('player:update', this._publicPlayerSnapshot(p));
-    const self = this._selfSnapshot(p); this._emitSelf(p);
-    ack && ack({ success: true, self });
+  _readyLobby(socket, data, ack) {
+    const room=this._roomOf(socket); if(!room)return ack?.({success:false,error:'not_in_room'});
+    const member=room.members.get(socket.id); if(!member)return ack?.({success:false,error:'not_in_room'});
+    member.ready=data?.ready!==false;
+    this._broadcastLobby(room);
+    ack?.({success:true,lobby:this._roomSnapshot(room)});
   }
 
-  _handleWorldInteract(socket, data, ack) {
-    const p = this.players.get(socket.id);
-    if (!p || !p.alive || p.downed) return ack && ack({ success:false, error:'invalid_player' });
-    const result = this.interactionSystem.interact(p, data?.id);
-    if (!result.success) return ack && ack({ ...result, self:this._selfSnapshot(p) });
-    worldMap.setDynamicObstacles(this.interactionSystem.getBlockingObstacles());
-    this.io.emit('world:interaction', result.item);
-    const self = this._selfSnapshot(p);
-    this._emitSelf(p);
-    ack && ack({ success:true, item:result.item, reward:result.reward, self });
+  _setLobbyMap(socket, data, ack) {
+    const room=this._roomOf(socket); if(!room)return ack?.({success:false,error:'not_in_room'});
+    if(room.hostSocketId!==socket.id)return ack?.({success:false,error:'host_only'});
+    if(room.started)return ack?.({success:false,error:'room_started'});
+    const mapId=String(data?.mapId||'');
+    if(!MAPS.some(m=>m.id===mapId))return ack?.({success:false,error:'invalid_map'});
+    room.mapId=mapId; this._broadcastLobby(room);
+    ack?.({success:true,lobby:this._roomSnapshot(room)});
   }
 
-  _distancePlayers(a, b) {
-    const ax = a.x + config.PLAYER_COLLISION_RADIUS;
-    const ay = a.y + config.PLAYER_COLLISION_RADIUS;
-    const bx = b.x + config.PLAYER_COLLISION_RADIUS;
-    const by = b.y + config.PLAYER_COLLISION_RADIUS;
-    return Math.hypot(ax - bx, ay - by);
+  _startLobby(socket, ack) {
+    const room=this._roomOf(socket); if(!room)return ack?.({success:false,error:'not_in_room'});
+    if(room.hostSocketId!==socket.id)return ack?.({success:false,error:'host_only'});
+    if(room.started)return ack?.({success:true,lobby:this._roomSnapshot(room),started:true});
+    if(room.members.size<1 || ![...room.members.values()].every(m=>m.ready))return ack?.({success:false,error:'players_not_ready'});
+    room.started=true; room.game=new RoomGame(this.io,room,this.accounts); room.lastActivityAt=Date.now();
+    this._broadcastLobby(room);
+    this.io.to(`game:${room.code}`).emit('lobby:started',{code:room.code,mapId:room.mapId});
+    ack?.({success:true,lobby:this._roomSnapshot(room),started:true});
   }
 
-  _handleReviveStart(socket, data, ack) {
-    const reviver = this.players.get(socket.id);
-    const target = this.players.get(String(data?.targetId || ''));
-    if (!reviver || !reviver.alive || reviver.downed) return ack && ack({success:false,error:'invalid_reviver'});
-    if (!target || !target.alive || !target.downed) return ack && ack({success:false,error:'invalid_target'});
-    if (target.id === reviver.id) return ack && ack({success:false,error:'invalid_target'});
-    if (this._distancePlayers(reviver, target) > config.REVIVE_RANGE) return ack && ack({success:false,error:'too_far'});
-    if (target.reviveBy && target.reviveBy !== reviver.id) return ack && ack({success:false,error:'already_reviving'});
+  _roomOf(socket) { return this.rooms.get(String(socket.data?.roomCode||'')) || null; }
 
-    target.reviveBy = reviver.id;
-    target.reviveStartedAt = Date.now();
-    const evt = { targetId:target.id, reviverId:reviver.id, startedAt:target.reviveStartedAt, durationMs:config.REVIVE_DURATION_MS };
-    this.io.emit('player:revive:start', evt);
-    ack && ack({success:true, ...evt});
+  _routeGame(socket, ack, fn) {
+    try {
+      const room=this._roomOf(socket);
+      if(!room?.started||!room.game)return ack?.({success:false,error:'game_not_started'});
+      fn(room.game);
+    } catch(err) { console.error('[game route]',err); ack?.({success:false,error:'server_error'}); }
+  }
+  _routeGameNoAck(socket, fn) {
+    try { const room=this._roomOf(socket); if(room?.started&&room.game)fn(room.game); } catch(err){console.error('[game route]',err);}
   }
 
-  _cancelRevive(target, reason='cancelled') {
-    if (!target?.reviveBy) return;
-    const evt = {targetId:target.id, reviverId:target.reviveBy, reason};
-    target.reviveBy = null;
-    target.reviveStartedAt = 0;
-    this.io.emit('player:revive:cancel', evt);
+  _leaveLobby(socket, disconnected=false) {
+    const room=this._roomOf(socket); if(!room)return;
+    if(room.game)room.game._handleLeave(socket, disconnected);
+    room.members.delete(socket.id);
+    socket.leave?.(`game:${room.code}`);
+    socket.data.roomCode=null;
+    if(room.hostSocketId===socket.id)room.hostSocketId=room.members.keys().next().value||null;
+    room.lastActivityAt=Date.now();
+    if(room.members.size===0){
+      // Queda de rede: mantém sala/jogo por um período de graça para reconexão.
+      if(!disconnected){ room.game?.stop(); this.rooms.delete(room.code); }
+    }else this._broadcastLobby(room);
   }
 
-  _handleReviveCancel(socket, data, ack) {
-    const target = this.players.get(String(data?.targetId || ''));
-    if (!target || target.reviveBy !== socket.id) return ack && ack({success:false,error:'not_reviving'});
-    this._cancelRevive(target, 'released');
-    ack && ack({success:true});
-  }
-
-  _completeRevive(target, reviver) {
-    if (!target || !reviver || !target.downed) return;
-    target.downed = false;
-    target.health = Math.max(1, Math.round(target.maxHealth * config.REVIVE_HEALTH_RATIO));
-    target.bleedOutEndAt = 0;
-    target.reviveBy = null;
-    target.reviveStartedAt = 0;
-    reviver.revives = (reviver.revives || 0) + 1;
-    reviver.money += config.REVIVE_REWARD;
-
-    const evt = {playerId:target.id, reviverId:reviver.id, health:target.health, maxHealth:target.maxHealth, reward:config.REVIVE_REWARD};
-    this.io.emit('player:revived', evt);
-    this.io.emit('player:update', this._publicPlayerSnapshot(target));
-    this.io.emit('player:update', this._publicPlayerSnapshot(reviver));
-    this._emitSelf(target);
-    this._emitSelf(reviver);
-  }
-
-  _downPlayer(p) {
-    if (!p || p.downed || !p.alive) return;
-    p.health = 0;
-    p.downed = true;
-    p.bleedOutEndAt = Date.now() + config.BLEEDOUT_MS;
-    p.reviveBy = null;
-    p.reviveStartedAt = 0;
-    p.reloadEndAt = 0;
-    p.reloadWeaponId = null;
-    const evt = {playerId:p.id, bleedOutEndAt:p.bleedOutEndAt, bleedOutMs:config.BLEEDOUT_MS};
-    this.io.emit('player:downed', evt);
-    this.io.emit('player:update', this._publicPlayerSnapshot(p));
-    this._emitSelf(p);
-  }
-
-  _killPlayer(p, reason='damage') {
-    if (!p) return;
-    if (p.reviveBy) this._cancelRevive(p, 'target_dead');
-    p.health = 0;
-    p.alive = false;
-    p.downed = false;
-    p.bleedOutEndAt = 0;
-    p.reviveBy = null;
-    p.reviveStartedAt = 0;
-    p.reloadEndAt = 0;
-    p.reloadWeaponId = null;
-    const socket = this.io.sockets.sockets.get(p.socketId);
-    if (socket) socket.emit('player:death', {reason});
-    this.io.emit('player:update', this._publicPlayerSnapshot(p));
-    this._emitSelf(p);
-  }
-
-  _handleRespawn(socket, ack) {
-    const p = this.players.get(socket.id);
-    if (!p) return ack && ack({ success: false, error: 'invalid_player' });
-    if (p.downed) return ack && ack({ success:false, error:'still_downed', self:this._selfSnapshot(p) });
-    if (!p.alive) {
-      const spawn = this._pickPlayerSpawn();
-      p.x = spawn.x; p.y = spawn.y; p.health = p.maxHealth; p.alive = true; p.downed = false;
-      p.bleedOutEndAt = 0; p.reviveBy = null; p.reviveStartedAt = 0;
-      p.lastStateAt = Date.now(); p.reloadEndAt = 0; p.reloadWeaponId = null;
-    }
-    ack && ack({ success: true, player: { x: p.x, y: p.y, health: p.health, maxHealth: p.maxHealth, alive: true }, self: this._selfSnapshot(p) });
-    socket.broadcast.emit('player:update', this._publicPlayerSnapshot(p));
-  }
-
-  _handleLeave(socket) {
-    const p = this.players.get(socket.id);
-    if (!p) return;
-    for (const target of this.players.values()) {
-      if (target.reviveBy === p.id) this._cancelRevive(target, 'reviver_left');
-    }
-    if (p.reviveBy) this._cancelRevive(p, 'target_left');
-    this.players.delete(socket.id);
-    socket.broadcast.emit('player:left', p.id);
-  }
-
-  _applyZombieDamageToPlayer(playerId, amount) {
-    const p = this.players.get(playerId);
-    if (!p || !p.alive || p.downed) return;
-    p.health = Math.max(0, p.health - Math.max(0, Number(amount) || 0));
-    const socket = this.io.sockets.sockets.get(p.socketId);
-    if (socket) socket.emit('player:damage', { health: p.health, maxHealth: p.maxHealth, amount });
-    if (p.health <= 0) {
-      const hasTeammate = [...this.players.values()].some(o => o.id !== p.id && o.alive && !o.downed);
-      if (hasTeammate) this._downPlayer(p);
-      else this._killPlayer(p, 'damage');
-      return;
-    }
-    this.io.emit('player:update', this._publicPlayerSnapshot(p));
-  }
-
-  _startLoop() { setInterval(() => this._tick(), config.SIMULATION_TICK_MS); }
-
-  _tick() {
-    const dt = config.SIMULATION_TICK_MS / 1000;
-    const now = Date.now();
-
-    for (const p of [...this.players.values()]) {
-      if (this._finishReloadIfDue(p)) this._emitSelf(p);
-      if (now - p.lastStateAt > config.OFFLINE_TIMEOUT_MS) {
-        const s = this.io.sockets.sockets.get(p.socketId);
-        if (!s || !s.connected) this.players.delete(p.id);
-      }
-    }
-
-    for (const p of this.players.values()) {
-      if (!p.downed) continue;
-      if (p.bleedOutEndAt && now >= p.bleedOutEndAt) {
-        this._killPlayer(p, 'bleedout');
-        continue;
-      }
-      if (p.reviveBy) {
-        const reviver = this.players.get(p.reviveBy);
-        if (!reviver || !reviver.alive || reviver.downed || this._distancePlayers(reviver, p) > config.REVIVE_RANGE) {
-          this._cancelRevive(p, 'interrupted');
-        } else if (now - p.reviveStartedAt >= config.REVIVE_DURATION_MS) {
-          this._completeRevive(p, reviver);
-        }
-      }
-    }
-
-    const alivePlayers = [...this.players.values()].filter(p => p.alive && !p.downed).map(p => ({ id: p.id, x: p.x + config.PLAYER_COLLISION_RADIUS, y: p.y + config.PLAYER_COLLISION_RADIUS }));
-    let roundChanged = false;
-    this.roundSystem.tick(dt, this.players.size, () => { roundChanged = true; });
-    if (roundChanged && this.interactionSystem.onRoundState(this.roundSystem.getState())) {
-      worldMap.setDynamicObstacles(this.interactionSystem.getBlockingObstacles());
-      this.io.emit('world:interactions', this.interactionSystem.getSnapshot());
-    }
-
-    if (this.roundSystem.state === 'running') {
-      this.zombieSystem.tick(dt, alivePlayers,
-        (playerId, amount) => this._applyZombieDamageToPlayer(playerId, amount),
-        evt => this._handleZombieSpecial(evt));
-    }
-
-    this.lootSystem.tick();
-
-    this._snapshotAccumulatorMs += config.SIMULATION_TICK_MS;
-    if (this._snapshotAccumulatorMs >= config.SNAPSHOT_INTERVAL_MS) {
-      this._snapshotAccumulatorMs = 0;
-      this.io.volatile.emit('zombies:snapshot', this.zombieSystem.getSnapshot());
-    }
-
-    this._roundAccumulatorMs += config.SIMULATION_TICK_MS;
-    if (roundChanged || this._roundAccumulatorMs >= config.ROUND_BROADCAST_INTERVAL_MS) {
-      this._roundAccumulatorMs = 0;
-      this.io.emit('round:state', this.roundSystem.getState());
-    }
-
-    this._lootAccumulatorMs += config.SIMULATION_TICK_MS;
-    if (this._lootAccumulatorMs >= config.LOOT_BROADCAST_INTERVAL_MS) {
-      this._lootAccumulatorMs = 0;
-      this.io.volatile.emit('loot:snapshot', this.lootSystem.getSnapshot());
+  _cleanupRooms() {
+    const now=Date.now();
+    for(const [code,room] of this.rooms){
+      if(room.members.size===0 && now-room.lastActivityAt>config.ROOM_IDLE_DELETE_MS){room.game?.stop();this.rooms.delete(code);}
     }
   }
 }
 
-module.exports = GameServer;
+GameServer.MAPS=MAPS;
+module.exports=GameServer;

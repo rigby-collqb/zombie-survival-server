@@ -21,7 +21,7 @@ app.use(cors());
 
 // Healthcheck simples (Render usa isso para saber que o serviço subiu).
 app.get('/', (_req, res) => {
-  res.status(200).send('Zombie Survival Online — servidor Node ativo.');
+  res.status(200).json(gameServer ? gameServer.status() : {online:true,version:'20.0.0'});
 });
 
 const httpServer = http.createServer(app);

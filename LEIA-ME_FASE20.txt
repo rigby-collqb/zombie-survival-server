@@ -1,0 +1,14 @@
+ZOMBIE SURVIVAL ONLINE — SERVIDOR FASE 20
+
+- Salas/lobbies separados por código
+- jogo rápido público
+- conta/perfil/XP/nível/moedas/skins
+- kill feed, score e ranking autoritativos
+- bosses progressivos a cada 5 rounds
+- snapshots compactos de zumbis
+- ping de jogadores
+- reconexão com preservação temporária do estado da partida
+- progressão recuperável por payload assinado
+
+Antes do deploy: npm install
+Depois: git add . && git commit && git push

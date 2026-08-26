@@ -11,11 +11,16 @@ class RoundSystem {
   _computeRoundConfig(round) {
     let totalZombies = config.ROUND_BASE_ZOMBIES + (round - 1) * config.ROUND_ZOMBIES_PER_ROUND;
     totalZombies = Math.min(totalZombies, 120); // total do round; vivos simultâneos continuam limitados em 60
+    const bossRound = round > 0 && round % 5 === 0;
+    const bossCount = bossRound ? (round >= 15 ? 2 + Math.floor((round - 15) / 10) : 1) : 0;
+    const bossPower = bossRound ? 1 + Math.max(0, Math.floor(round / 5) - 1) * 0.32 : 1;
     return {
       totalZombies,
       healthMultiplier: 1 + Math.max(0, round - 1) * config.ROUND_HEALTH_MULTIPLIER_PER_ROUND,
       speedMultiplier: 1 + Math.max(0, round - 1) * config.ROUND_SPEED_MULTIPLIER_PER_ROUND,
       roundNumber: round,
+      bossCount,
+      bossPower,
     };
   }
 
@@ -34,9 +39,9 @@ class RoundSystem {
   }
 
   tick(dt, playerCount, onChange) {
-    if (playerCount === 0 && this.state !== 'waiting') {
-      this._resetToWaiting(); onChange(); return;
-    }
+    // Se todos caírem por alguns segundos (troca de rede/mobile), congela o round.
+    // A sala é mantida por um período de graça e pode ser retomada sem resetar a partida.
+    if (playerCount === 0) return;
     if (this.state === 'waiting') {
       if (playerCount >= 1) { this.state = 'countdown'; this.timer = config.ROUND_START_COUNTDOWN_SECONDS; onChange(); }
     } else if (this.state === 'countdown') {
@@ -62,6 +67,7 @@ class RoundSystem {
       zombiesAlive: this.zombieSystem.aliveCount,
       zombiesRemaining: this.zombieSystem.aliveCount + this.zombieSystem.remainingToSpawn,
       bossRound: displayNumber > 0 && displayNumber % 5 === 0,
+      bossCount: displayNumber > 0 && displayNumber % 5 === 0 ? (displayNumber >= 15 ? 2 + Math.floor((displayNumber - 15) / 10) : 1) : 0,
       shopOpen: this.state === 'intermission',
     };
   }

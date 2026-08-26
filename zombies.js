@@ -21,9 +21,12 @@ class ZombieSystem {
     this.totalSpawnedThisRound = 0;
     this.roundNumber = 0;
     this.bossSpawned = false;
+    this.bossesSpawned = 0;
+    this.bossCount = 0;
+    this.bossPower = 1;
   }
 
-  setRoundParameters({ totalZombies, healthMultiplier, speedMultiplier, roundNumber = 0 }) {
+  setRoundParameters({ totalZombies, healthMultiplier, speedMultiplier, roundNumber = 0, bossCount = 0, bossPower = 1 }) {
     this.zombies.clear();
     this.maxZombiesThisRound = totalZombies;
     this.healthMultiplier = healthMultiplier;
@@ -31,6 +34,9 @@ class ZombieSystem {
     this.roundNumber = roundNumber;
     this.totalSpawnedThisRound = 0;
     this.bossSpawned = false;
+    this.bossesSpawned = 0;
+    this.bossCount = Math.max(0, Number(bossCount) || 0);
+    this.bossPower = Math.max(1, Number(bossPower) || 1);
   }
 
   get aliveCount() {
@@ -48,8 +54,9 @@ class ZombieSystem {
   }
 
   _pickType() {
-    if (this.roundNumber > 0 && this.roundNumber % 5 === 0 && !this.bossSpawned) {
+    if (this.roundNumber > 0 && this.roundNumber % 5 === 0 && this.bossesSpawned < this.bossCount) {
       this.bossSpawned = true;
+      this.bossesSpawned++;
       return 'boss';
     }
 
@@ -97,7 +104,8 @@ class ZombieSystem {
 
     const type = this._pickType();
     const spec = ZOMBIE_TYPES[type];
-    const maxHealth = Math.max(1, Math.round(config.ZOMBIE_BASE_HEALTH * this.healthMultiplier * spec.health));
+    const bossScale = type === 'boss' ? this.bossPower : 1;
+    const maxHealth = Math.max(1, Math.round(config.ZOMBIE_BASE_HEALTH * this.healthMultiplier * spec.health * bossScale));
     const id = nextZombieId++;
 
     this.zombies.set(id, {
@@ -106,8 +114,8 @@ class ZombieSystem {
       health: maxHealth, maxHealth,
       radius: spec.radius,
       speed: config.ZOMBIE_BASE_SPEED * this.speedMultiplier * spec.speed,
-      damage: spec.damage,
-      reward: spec.reward,
+      damage: Math.round(spec.damage * (type === 'boss' ? Math.min(2.2, this.bossPower) : 1)),
+      reward: Math.round(spec.reward * (type === 'boss' ? this.bossPower : 1)),
       state: 'idle', targetPlayerId: null,
       directionX: 0, directionY: 1,
       wanderX: null, wanderY: null,
@@ -269,6 +277,15 @@ class ZombieSystem {
         directionX: z.directionX, directionY: z.directionY,
         radius: z.radius, speed: z.speed,
       });
+    }
+    return out;
+  }
+
+  // Snapshot compacto para tráfego mobile: [id,type,x,y,hp,maxHp,state,dx,dy,radius,speed]
+  getCompactSnapshot() {
+    const out = [];
+    for (const z of this.zombies.values()) {
+      out.push([z.id,z.type,Math.round(z.x*10)/10,Math.round(z.y*10)/10,z.health,z.maxHealth,z.state,Math.round(z.directionX*1000)/1000,Math.round(z.directionY*1000)/1000,z.radius,Math.round(z.speed*10)/10]);
     }
     return out;
   }

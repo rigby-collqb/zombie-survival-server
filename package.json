@@ -1,7 +1,7 @@
 {
   "name": "zombie-survival-server",
-  "version": "11.0.0",
-  "description": "Servidor autoritativo do Zombie Survival Online - Fases 7-11 (VFX, audio, mapa, interacoes e revive)",
+  "version": "20.0.0",
+  "description": "Servidor autoritativo do Zombie Survival Online - Fases 12-20 (feed, score, bosses, lobby, skins, progressao, performance e mobile)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
