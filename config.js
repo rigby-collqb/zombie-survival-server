@@ -40,6 +40,12 @@ module.exports = {
   ROUND_SPEED_MULTIPLIER_PER_ROUND: 0.025,
 
   MAX_WEAPON_SLOTS: 2,
+  MAX_MEDKITS: 3,
+  MAX_GRENADES: 3,
+  MEDKIT_HEAL: 45,
+  GRENADE_DAMAGE: 120,
+  GRENADE_RADIUS: 135,
+  GRENADE_THROW_DISTANCE: 230,
   PICKUP_DISTANCE: 72,
   LOOT_LIFETIME_MS: 45000,
   MAX_LOOT_ITEMS: 40,
@@ -80,4 +86,21 @@ module.exports = {
   LOBBY_MAX_PLAYERS: 8,
   LOBBY_CODE_LENGTH: 5,
   ROOM_IDLE_DELETE_MS: 120000,
+
+  // Fase 25
+  STORY_CHAPTER_TRANSITION_MS: 6500,
+  STORY_CINEMATIC_MS: 8200,
+  MYSTERY_BOX_COST: 950,
+  PACK_A_PUNCH_COSTS: [0, 2500, 5000],
+  PERK_COSTS: { iron_heart:900, quick_hands:850, fleet_feet:800, deadeye:1000, lucky_chamber:1100 },
+  MAX_PERKS: 5,
+  CHAT_COOLDOWN_MS: 500,
+  SINGLEPLAYER_PAUSE_ALLOWED: true,
+
+  DIFFICULTIES: {
+    casual:{id:'casual',name:'Casual',zombieHealth:0.78,zombieSpeed:0.90,zombieDamage:0.72,zombieCount:0.82,reward:0.85,loot:1.25},
+    normal:{id:'normal',name:'Normal',zombieHealth:1,zombieSpeed:1,zombieDamage:1,zombieCount:1,reward:1,loot:1},
+    hard:{id:'hard',name:'Difícil',zombieHealth:1.32,zombieSpeed:1.10,zombieDamage:1.22,zombieCount:1.15,reward:1.20,loot:0.90},
+    nightmare:{id:'nightmare',name:'Pesadelo',zombieHealth:1.72,zombieSpeed:1.18,zombieDamage:1.45,zombieCount:1.30,reward:1.50,loot:0.72,hudRestricted:true},
+  },
 };

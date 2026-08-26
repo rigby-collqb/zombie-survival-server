@@ -1,0 +1,21 @@
+FASE 25 — TESTES EXECUTADOS ANTES DO EMPACOTAMENTO
+
+OK - Sintaxe de todos os JS do cliente e servidor (node --check).
+OK - 5 JSONs de mapas cliente/servidor com hashes idênticos.
+OK - Cidade, Hospital, Floresta, Militar e Laboratório com spawn seguro contra colisões.
+OK - Modo História: 5 capítulos, bloqueio/ordem dos objetivos, progressão e final.
+OK - Trocas autoritativas entre os 5 mapas da campanha.
+OK - Pausa single-player congela o tick do servidor e desloca reload/bleedout/timers ao retomar.
+OK - Multiplayer não congela o servidor ao abrir pause.
+OK - Inventário de 2 armas, troca de slot, medkit e granada.
+OK - Perk, Caixa do Acaso e evolução até MK-III.
+OK - Armas especiais e upgrades.
+OK - 4 tipos de eventos aleatórios.
+OK - 4 dificuldades e catálogo de conquistas.
+OK - Chat rápido.
+OK - IDs HTML únicos, scripts locais presentes e integração pause cliente/servidor.
+OK - Assets de áudio/cutscene/capa presentes.
+OK - Runtime visual dos 6 tipos de zumbi, feridas e cadáveres.
+OK - Runtime de render das mini-cutscenes nos 5 mapas.
+
+Limite do teste local: experiência final em navegador/celular real e latência do Render dependem do ambiente de publicação.

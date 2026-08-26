@@ -1,0 +1,41 @@
+ZOMBIE SURVIVAL ONLINE — FASE 23
+================================
+
+NOVIDADE PRINCIPAL
+- Cutscene cinematográfica exibida em todo carregamento do site.
+- Aproximadamente 40 segundos.
+- Qualquer clique/toque ou ESC/ENTER/ESPAÇO pula a cutscene.
+- Texto inferior: "CLIQUE EM QUALQUER LUGAR PARA PULAR".
+
+SEQUÊNCIA
+1. Arquivo de emergência / primeiras chamadas.
+2. Tiros na rua e soldados tentando conter a infecção.
+3. Hospital: médicos correndo com uma maca.
+4. Civis correndo, ambulância, sirenes e pânico.
+5. Zumbis surgindo de um beco / quebra de contenção.
+6. Checkpoint militar sendo tomado.
+7. Sobrevivente sozinho após a queda.
+8. Revelação do logo ZOMBIE SURVIVAL ONLINE.
+
+ÁUDIO
+- assets/audio/intro_cinematic.mp3
+- Trilha original/sintética criada para a introdução, com suspense, sirene,
+  tiros, pânico e impactos cinematográficos.
+- Navegadores podem bloquear autoplay com som no PRIMEIRO acesso sem gesto do
+  usuário. Nesse caso a cutscene visual continua normalmente. Isso é política
+  do Chrome/Safari e não um erro do jogo.
+
+ARQUIVOS ALTERADOS
+- index.html
+- css/style.css
+- js/intro.js (novo)
+- js/main.js
+- sw.js
+- assets/audio/intro_cinematic.mp3 (novo)
+
+CACHE
+- Assets: v=60
+- Service Worker: zso-shell-v23-60
+
+SERVIDOR
+- Nenhuma mudança no Render é necessária para esta fase.

@@ -1,0 +1,44 @@
+FASE 23 — TESTES EXECUTADOS
+===========================
+
+1. JavaScript
+- Todos os arquivos js/*.js passaram em `node --check`.
+- intro.js passou em teste de runtime com Canvas/DOM simulados.
+- Foram renderizadas amostras de TODOS os 8 trechos da timeline sem exceção.
+Resultado: INTRO_RUNTIME_SCENES_OK
+
+2. HTML
+- IDs verificados: nenhum ID duplicado.
+- intro.js é carregado antes do Socket.IO e inicia imediatamente, sem depender
+  do CDN para a cutscene aparecer.
+- Game só é criado depois que a cutscene termina ou é pulada.
+
+3. Áudio
+- intro_cinematic.mp3 validado com ffprobe.
+- Duração aproximada: 40.05 segundos.
+- Trilha estéreo original gerada para esta fase.
+
+4. Timeline
+- 0.0–2.6s: arquivo de emergência.
+- 2.6–8.1s: tiroteio / contenção.
+- 8.1–13.7s: hospital / médicos / maca.
+- 13.7–19.4s: evacuação / civis correndo.
+- 19.4–25.7s: zumbis surgindo / contenção quebrada.
+- 25.7–32.4s: checkpoint militar caindo.
+- 32.4–36.2s: sobrevivente.
+- 36.2–40.0s: logo do jogo.
+
+5. Skip
+- Pointer/click/touch no overlay chama finish(true).
+- ESC, Enter e Espaço também pulam.
+- Botão ATIVAR SOM é exceção proposital: ativa áudio sem pular.
+
+6. Cache
+- HTML/CSS/JS desta fase usam v=60.
+- Service Worker: zso-shell-v23-60.
+
+OBSERVAÇÃO DE NAVEGADOR
+Chrome/Safari podem bloquear áudio automático antes de qualquer gesto do
+usuário. A cutscene visual NÃO depende disso. Se o autoplay for bloqueado,
+aparece um botão discreto "ATIVAR SOM" no canto. Isso é uma política do
+navegador e não pode ser contornada de forma confiável por um site.

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="theme-color" content="#0a0908">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="format-detection" content="telephone=no">
+  <title>Zombie Survival Online</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="assets/icon-192.png">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <link rel="stylesheet" href="css/style.css?v=60">
+</head>
+<body>
+
+<section id="intro-cutscene" class="intro-cutscene" aria-hidden="false">
+  <canvas id="intro-canvas" class="intro-canvas"></canvas>
+  <div id="intro-timecode" class="intro-timecode">REC 00:00:00</div>
+  <button id="intro-audio-button" class="intro-audio-button hidden" type="button">🔊 ATIVAR SOM</button>
+  <div id="intro-caption" class="intro-caption"></div>
+  <div id="intro-skip" class="intro-skip">CLIQUE EM QUALQUER LUGAR PARA PULAR</div>
+</section>
+<script src="js/intro.js?v=60"></script>
+<script>window.__introPromise=window.IntroCutscene?.play?.()||Promise.resolve();</script>
+
+<section id="main-menu" class="screen">
+  <div class="menu-bg"></div><div class="menu-bg-vignette"></div>
+  <div class="menu-content">
+    <h1 class="game-title">ZOMBIE <span class="accent">SURVIVAL</span><small>ONLINE</small></h1>
+    <div id="menu-profile-card" class="menu-profile-card hidden">
+      <div class="menu-profile-avatar" id="menu-profile-avatar">●</div>
+      <div class="menu-profile-copy">
+        <div><b id="menu-profile-name">Sobrevivente</b> <span id="menu-profile-level">Nv. 1</span></div>
+        <div class="profile-xp-track"><div id="menu-profile-xp-fill" class="profile-xp-fill"></div></div>
+        <small><span id="menu-profile-xp">0/250 XP</span> · <span id="menu-profile-coins">0 moedas</span></small>
+      </div>
+    </div>
+    <nav class="menu-buttons">
+      <button id="btn-play" class="menu-btn menu-btn-primary">JOGAR</button>
+      <button id="btn-profile" class="menu-btn">PERFIL / SKINS</button>
+      <button id="btn-friends" class="menu-btn">AMIGOS</button>
+      <button id="btn-settings" class="menu-btn">CONFIGURAÇÕES</button>
+      <button id="btn-credits" class="menu-btn">CRÉDITOS</button>
+    </nav>
+    <p class="menu-footer">Fase 23 — By Allvesz</p>
+  </div>
+  <aside id="home-leaderboard" class="home-leaderboard">
+    <div class="home-leaderboard-head"><div><small>RANKING GLOBAL</small><b>TOP SOBREVIVENTES</b></div><button id="btn-ranking-refresh" class="mini-btn">↻</button></div>
+    <div id="leaderboard-podium" class="leaderboard-podium"></div>
+    <div id="leaderboard-list" class="leaderboard-list"></div>
+  </aside>
+</section>
+
+<!-- Conta: nome escolhido uma única vez neste navegador/perfil. -->
+<div id="account-modal" class="modal hidden">
+  <div class="modal-box account-modal-box">
+    <h2>CRIAR SOBREVIVENTE</h2>
+    <p class="modal-copy">Escolha seu nome. Por enquanto ele fica vinculado à conta e não poderá ser alterado.</p>
+    <div class="setting-row"><label for="input-account-name">Nome</label><input id="input-account-name" type="text" maxlength="16" placeholder="Sobrevivente" autocomplete="off"></div>
+    <div id="account-message" class="modal-message"></div>
+    <button id="btn-account-create" class="menu-btn menu-btn-primary">CRIAR CONTA</button>
+  </div>
+</div>
+
+<!-- Lobby -->
+<div id="lobby-modal" class="modal hidden">
+  <div class="modal-box lobby-modal-box">
+    <div class="lobby-head"><div><h2>LOBBY</h2><p id="lobby-subtitle">Escolha como jogar</p></div><button id="btn-lobby-close" class="icon-close">×</button></div>
+    <div id="lobby-home" class="lobby-home">
+      <button id="btn-quick-play" class="menu-btn menu-btn-primary">JOGO RÁPIDO</button>
+      <button id="btn-create-room" class="menu-btn">CRIAR SALA</button>
+      <div class="lobby-join-row"><input id="input-room-code" type="text" maxlength="5" placeholder="CÓDIGO" autocomplete="off"><button id="btn-join-room" class="menu-btn">ENTRAR</button></div>
+      <div id="lobby-home-message" class="modal-message"></div>
+    </div>
+    <div id="lobby-room" class="lobby-room hidden">
+      <div class="lobby-code-card">SALA <b id="lobby-code">-----</b><button id="btn-copy-room-code" class="mini-btn">COPIAR</button></div>
+      <div class="setting-row"><label for="lobby-map-select">Mapa</label><select id="lobby-map-select"></select></div>
+      <div id="lobby-map-preview" class="lobby-map-preview" data-theme="city"><b id="lobby-map-preview-name">Cidade Abandonada</b><small id="lobby-map-preview-desc">Centro urbano destruído, becos e pontos de interesse.</small></div>
+      <div id="lobby-members" class="lobby-members"></div>
+      <div class="lobby-actions"><button id="btn-lobby-ready" class="menu-btn">PRONTO</button><button id="btn-lobby-start" class="menu-btn menu-btn-primary hidden">INICIAR</button><button id="btn-lobby-leave" class="menu-btn">SAIR DA SALA</button></div>
+      <div id="lobby-room-message" class="modal-message"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Perfil / skins -->
+<div id="profile-modal" class="modal hidden">
+  <div class="modal-box profile-modal-box">
+    <div class="lobby-head"><div><h2>PERFIL</h2><p id="profile-summary">Nv. 1</p></div><button class="icon-close" data-close="profile-modal">×</button></div>
+    <div class="profile-friend-code">CÓDIGO DE AMIGO <b id="profile-friend-code">--------</b></div>
+    <div class="profile-stats-grid">
+      <div><b id="profile-kills">0</b><small>KILLS</small></div><div><b id="profile-headshots">0</b><small>HEADSHOTS</small></div><div><b id="profile-revives">0</b><small>REVIVES</small></div><div><b id="profile-highest-round">0</b><small>MAIOR ROUND</small></div>
+    </div>
+    <h3>PERSONAGEM</h3><div id="character-skins" class="skin-grid"></div>
+    <h3>ARMA</h3><div id="weapon-skins" class="skin-grid"></div>
+  </div>
+</div>
+
+<!-- Configurações -->
+<div id="settings-modal" class="modal hidden">
+  <div class="modal-box">
+    <h2>CONFIGURAÇÕES</h2>
+    <div class="setting-row"><label>Nome da conta</label><input id="input-player-name" type="text" value="Ainda não criado" disabled></div>
+    <div class="setting-row"><label for="input-volume">Volume</label><input type="range" id="input-volume" min="0" max="100" value="60"></div>
+    <div class="setting-row"><label for="input-aim-sensitivity">Sensibilidade da mira mobile <span id="aim-sensitivity-value">1.00x</span></label><input type="range" id="input-aim-sensitivity" min="50" max="180" value="100"></div>
+    <div class="setting-row"><label for="select-vfx-quality">Qualidade de VFX</label><select id="select-vfx-quality"><option value="auto">Automático</option><option value="low">Baixo</option><option value="medium">Médio</option><option value="high">Alto</option></select></div>
+    <div class="setting-row"><label for="select-hud-mode">HUD / Controles</label><select id="select-hud-mode"><option value="auto">Automático</option><option value="pc">PC</option><option value="mobile">Mobile</option></select></div>
+    <div class="setting-row setting-row-toggle"><label for="input-vibration">Vibração no celular</label><input type="checkbox" id="input-vibration" checked></div>
+    <div class="setting-row setting-row-toggle"><label for="input-show-fps">Mostrar FPS</label><input type="checkbox" id="input-show-fps"></div>
+    <button id="btn-settings-fullscreen" class="menu-btn">TELA CHEIA</button>
+    <small class="fullscreen-note">No celular, o jogo também tenta entrar em tela cheia ao jogar. Se o navegador ainda mostrar barras, adicione o jogo à tela inicial para abrir no modo app/fullscreen.</small>
+    <button id="btn-settings-close" class="menu-btn menu-btn-close">FECHAR</button>
+  </div>
+</div>
+
+<div id="friends-modal" class="modal hidden">
+  <div class="modal-box friends-modal-box">
+    <div class="lobby-head"><div><h2>AMIGOS</h2><p>Convide sobreviventes para sua sala</p></div><button class="icon-close" data-close="friends-modal">×</button></div>
+    <div class="friend-code-card">SEU CÓDIGO <b id="friends-my-code">--------</b><button id="btn-copy-friend-code" class="mini-btn">COPIAR</button></div>
+    <div class="friend-add-row"><input id="input-friend-code" type="text" maxlength="8" placeholder="CÓDIGO DO AMIGO" autocomplete="off"><button id="btn-add-friend" class="menu-btn">ADICIONAR</button></div>
+    <div id="friends-message" class="modal-message"></div>
+    <h3>PEDIDOS</h3><div id="friend-requests" class="friend-list"></div>
+    <h3>AMIGOS</h3><div id="friends-list" class="friend-list"></div>
+  </div>
+</div>
+
+<div id="friend-invite-modal" class="modal hidden">
+  <div class="modal-box invite-modal-box">
+    <h2>CONVITE DE SALA</h2>
+    <p id="friend-invite-text" class="modal-copy">Um amigo te convidou para jogar.</p>
+    <div class="invite-actions"><button id="btn-friend-invite-accept" class="menu-btn menu-btn-primary">ACEITAR</button><button id="btn-friend-invite-decline" class="menu-btn">RECUSAR</button></div>
+  </div>
+</div>
+
+<div id="credits-modal" class="modal hidden"><div class="modal-box"><h2>CRÉDITOS</h2><p class="credits-text">Zombie Survival Online<br><br>Multiplayer · Rounds · Bosses · Loot · Revive · Amigos · Ranking · Progressão · PC + Mobile<br><br>By Allvesz</p><button class="menu-btn menu-btn-close" data-close="credits-modal">FECHAR</button></div></div>
+
+<section id="game-screen" class="screen hidden">
+  <canvas id="game-canvas"></canvas>
+  <div id="hud">
+    <div class="hud-top-left">
+      <div class="hud-health"><span class="hud-heart">❤</span><div class="hud-health-bar-bg"><div id="hud-health-bar-fill" class="hud-health-bar-fill"></div></div><span id="hud-health-text" class="hud-health-text">100/100</span></div>
+      <div id="hud-player-name" class="hud-player-name">Sobrevivente</div><div id="hud-zone" class="hud-zone">POSTO DOS SOBREVIVENTES</div>
+      <div class="hud-combat-panel"><div class="hud-weapon-row"><span class="hud-weapon-name"><span id="hud-weapon-icon" class="hud-weapon-icon">⌐</span><span id="hud-weapon" class="hud-weapon">PISTOLA</span></span><span id="hud-ammo" class="hud-ammo">12 / 72</span></div><div class="hud-progress-row"><span id="hud-money" class="hud-money">$0</span><span id="hud-score" class="hud-score">PTS 0</span><span id="hud-kills" class="hud-kills">Kills: 0</span><span id="hud-headshots" class="hud-headshots">HS: 0</span><span id="hud-revives" class="hud-revives">Revives: 0</span></div><div class="hud-slots-row"><span id="hud-slot-1" class="hud-slot hud-slot-active">1 · PISTOLA</span><span id="hud-slot-2" class="hud-slot">2 · —</span></div><div id="hud-low-ammo" class="hud-low-ammo hidden">⚠ POUCA MUNIÇÃO</div><div id="hud-reload" class="hud-reload hidden">RECARREGANDO...</div></div>
+    </div>
+    <div class="hud-top-right"><div class="hud-network-status"><span id="hud-network-dot" class="hud-network-dot">🟢</span><span id="hud-network-players" class="hud-network-players">Jogadores: 1</span><span id="hud-network-ping" class="hud-network-ping">Ping: --ms</span></div><span id="hud-room" class="hud-room">Sala: -----</span><span id="hud-round" class="hud-round">Round: 0</span><span id="hud-zombies" class="hud-zombies">Zumbis: 0/0</span><div class="hud-round-progress"><div id="hud-round-progress-fill" class="hud-round-progress-fill"></div></div><span class="hud-clock-icon">🕐</span><span id="hud-clock" class="hud-clock-text">00:00</span><button id="btn-scoreboard-hud" class="hud-shop-btn">PLACAR</button><button id="btn-shop-hud" class="hud-shop-btn hidden">LOJA [B]</button><button id="btn-fullscreen-hud" class="hud-shop-btn">⛶</button><button id="btn-pause-mobile" class="hud-pause-btn">⏸</button></div>
+    <div class="hud-minimap-panel"><div class="hud-minimap-title">MAPA</div><canvas id="hud-minimap" width="150" height="150"></canvas><div id="hud-allies" class="hud-allies"></div></div>
+    <div id="hud-fps" class="hud-fps hidden">FPS: 0</div>
+    <div id="kill-feed" class="kill-feed-list"></div>
+    <div id="round-banner" class="round-banner hidden"><div id="round-banner-title" class="round-banner-title"></div><div id="round-banner-subtitle" class="round-banner-subtitle"></div></div>
+  </div>
+
+  <div id="damage-flash-overlay" class="damage-flash-overlay"></div><div id="low-health-vignette" class="low-health-vignette"></div>
+  <div id="boss-overlay" class="boss-overlay hidden"><div class="boss-warning">⚠ BOSS INCOMING ⚠</div><div id="boss-round-text">ROUND 5</div></div>
+  <div id="downed-overlay" class="downed-overlay hidden"><div class="downed-card"><div class="downed-title">VOCÊ CAIU</div><div id="downed-status" class="downed-status">AGUARDE UM ALIADO</div><div class="downed-timer-label">SANGRANDO</div><div id="downed-timer" class="downed-timer">15s</div></div></div>
+  <div id="revive-prompt" class="revive-prompt hidden"><div id="revive-prompt-text" class="revive-prompt-text">SEGURE E / USAR — REVIVER</div><div class="revive-progress"><div id="revive-progress-fill" class="revive-progress-fill"></div></div></div>
+
+  <div id="joystick-zone" class="joystick-zone"><div id="joystick-base" class="joystick-base"><div id="joystick-stick" class="joystick-stick"></div></div></div>
+  <div id="shoot-zone" class="shoot-zone"><div id="shoot-base" class="shoot-base"><span class="shoot-label">MIRA<br>TIRO</span><div id="shoot-stick" class="shoot-stick"></div></div></div>
+  <div id="mobile-actions" class="mobile-actions"><button id="btn-mobile-reload" class="mobile-action-btn">↻<small>RECARGA</small></button><button id="btn-mobile-switch" class="mobile-action-btn">⇄<small>ARMA</small></button><button id="btn-mobile-interact" class="mobile-action-btn">E<small>USAR</small></button><button id="btn-mobile-pickup" class="mobile-action-btn">F<small>PEGAR</small></button><button id="btn-mobile-shop" class="mobile-action-btn mobile-shop-btn">$<small>LOJA</small></button><button id="btn-mobile-score" class="mobile-action-btn">★<small>PLACAR</small></button></div>
+  <div id="interaction-prompt" class="interaction-prompt hidden">E — USAR</div><div id="loot-prompt" class="loot-prompt hidden">F — PEGAR</div>
+</section>
+
+<div id="scoreboard-overlay" class="scoreboard-overlay hidden"><div class="scoreboard-card"><div class="scoreboard-head"><h2>PLACAR DA PARTIDA</h2><span id="scoreboard-room">SALA -----</span></div><div class="scoreboard-columns"><span>#</span><span>JOGADOR</span><span>PTS</span><span>K</span><span>HS</span><span>REV</span><span>PING</span></div><div id="scoreboard-rows" class="scoreboard-rows"></div><small>Segure TAB no PC ou use o botão PLACAR no celular</small></div></div>
+
+<div id="connection-lost-overlay" class="connection-overlay hidden"><div class="connection-overlay-box"><p class="connection-overlay-title">CONEXÃO PERDIDA</p><p class="connection-overlay-subtitle">Tentando reconectar...</p></div></div>
+<div id="orientation-lock-overlay" class="orientation-overlay"><div class="orientation-overlay-box"><div class="orientation-icon">📱</div><p class="orientation-title">VIRE O CELULAR</p><p class="orientation-subtitle">Este jogo só pode ser jogado no modo paisagem.</p></div></div>
+
+<div id="death-screen" class="modal hidden"><div class="modal-box death-modal-box"><h2 class="death-title">VOCÊ MORREU</h2><div id="death-penalty" class="death-penalty"></div><div id="spectator-status" class="spectator-status">ESPECTANDO: —</div><div class="spectator-buttons"><button id="btn-spectate-prev" class="mini-btn">◀</button><button id="btn-spectate-next" class="mini-btn">▶</button></div><div class="menu-buttons"><button id="btn-respawn" class="menu-btn menu-btn-primary" disabled>RESPAWN</button><button id="btn-death-back-to-menu" class="menu-btn">VOLTAR AO MENU</button></div><p id="death-respawn-countdown" class="death-respawn-countdown"></p></div></div>
+
+<div id="shop-modal" class="modal hidden"><div class="modal-box shop-modal-box"><div class="shop-header"><div><h2>LOJA DE SOBREVIVÊNCIA</h2><p>Disponível durante a intermissão</p></div><div id="shop-money" class="shop-money">$0</div></div><div id="shop-items" class="shop-items"></div><div id="shop-message" class="shop-message"></div><button id="btn-shop-close" class="menu-btn menu-btn-close">FECHAR</button></div></div>
+
+<div id="pause-menu" class="modal hidden"><div class="modal-box"><h2>PAUSADO</h2><div class="menu-buttons"><button id="btn-resume" class="menu-btn menu-btn-primary">CONTINUAR</button><button id="btn-pause-settings" class="menu-btn">CONFIGURAÇÕES</button><button id="btn-back-to-menu" class="menu-btn">VOLTAR AO MENU</button></div></div></div>
+
+<script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+<script src="js/profile.js?v=60"></script>
+<script src="js/collision.js?v=60"></script><script src="js/map.js?v=60"></script><script src="js/camera.js?v=60"></script>
+<script src="js/weapons.js?v=60"></script><script src="js/player.js?v=60"></script><script src="js/remotePlayer.js?v=60"></script>
+<script src="js/zombie.js?v=60"></script><script src="js/zombieManager.js?v=60"></script><script src="js/lootManager.js?v=60"></script><script src="js/interactionManager.js?v=60"></script><script src="js/audio.js?v=60"></script><script src="js/vfx.js?v=60"></script><script src="js/combat.js?v=60"></script>
+<script src="js/network.js?v=60"></script><script src="js/input.js?v=60"></script><script src="js/ui.js?v=60"></script><script src="js/game.js?v=60"></script><script src="js/main.js?v=60"></script>
+</body>
+</html>

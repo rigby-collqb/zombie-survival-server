@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#120b0a"/><stop offset=".46" stop-color="#28100d"/><stop offset="1" stop-color="#070707"/>
+    </linearGradient>
+    <radialGradient id="sun"><stop offset="0" stop-color="#d6432e" stop-opacity=".72"/><stop offset=".45" stop-color="#8e2118" stop-opacity=".35"/><stop offset="1" stop-color="#210605" stop-opacity="0"/></radialGradient>
+    <linearGradient id="road" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#242220"/><stop offset="1" stop-color="#090909"/></linearGradient>
+    <filter id="blur20"><feGaussianBlur stdDeviation="20"/></filter>
+    <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency=".8" numOctaves="2" seed="13"/><feColorMatrix values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 .08 0"/></filter>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#sky)"/>
+  <circle cx="1420" cy="360" r="420" fill="url(#sun)" filter="url(#blur20)"/>
+  <path d="M0 640L0 420 120 420 120 520 220 520 220 350 390 350 390 530 505 530 505 300 680 300 680 500 810 500 810 385 935 385 935 530 1050 530 1050 270 1215 270 1215 515 1320 515 1320 410 1465 410 1465 510 1580 510 1580 330 1735 330 1735 500 1920 500 1920 670Z" fill="#0a0909"/>
+  <g fill="#161413" opacity=".9">
+    <rect x="40" y="505" width="280" height="150"/><rect x="350" y="490" width="250" height="190"/><rect x="655" y="500" width="320" height="175"/><rect x="1020" y="485" width="330" height="190"/><rect x="1390" y="500" width="260" height="170"/><rect x="1690" y="480" width="230" height="190"/>
+  </g>
+  <g fill="#8c3b2f" opacity=".18">
+    <rect x="90" y="460" width="8" height="80"/><rect x="535" y="360" width="10" height="130"/><rect x="1115" y="330" width="8" height="150"/><rect x="1610" y="390" width="8" height="110"/>
+  </g>
+  <path d="M560 1080L820 635H1100L1390 1080Z" fill="url(#road)"/>
+  <path d="M948 690L969 690L1040 1080L1000 1080Z" fill="#b49d76" opacity=".22"/>
+  <g fill="#0a0908">
+    <ellipse cx="315" cy="880" rx="38" ry="36"/><path d="M290 905L340 905 356 1040 322 1040 314 950 303 1040 270 1040Z"/><path d="M287 920L220 985 205 968 275 890Z"/><path d="M340 916L405 950 396 970 333 944Z"/>
+    <ellipse cx="1555" cy="845" rx="42" ry="40"/><path d="M1525 875L1580 875 1600 1045 1563 1045 1555 935 1542 1045 1506 1045Z"/><path d="M1530 892L1470 942 1458 925 1518 858Z"/><path d="M1577 900L1645 980 1625 994 1565 930Z"/>
+    <ellipse cx="1700" cy="930" rx="28" ry="27"/><path d="M1680 950L1718 950 1730 1060 1704 1060 1699 985 1690 1060 1665 1060Z"/>
+  </g>
+  <g stroke="#c83a2b" stroke-width="3" opacity=".25"><path d="M0 720H1920"/><path d="M0 760H1920"/></g>
+  <rect width="1920" height="1080" filter="url(#grain)" opacity=".35"/>
+  <rect width="1920" height="1080" fill="none" stroke="#000" stroke-width="180" opacity=".45"/>
+</svg>

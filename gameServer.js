@@ -23,7 +23,7 @@ class GameServer {
       players += r.members.size;
       if (r.started) activeRooms++;
     }
-    return { online:true, version:'22.0.0', rooms:this.rooms.size, activeRooms, players, accounts:this.accounts.accounts.size };
+    return { online:true, version:'25.0.0', rooms:this.rooms.size, activeRooms, players, accounts:this.accounts.accounts.size };
   }
 
   _safe(ack, fn) {
@@ -52,6 +52,7 @@ class GameServer {
       socket.on('lobby:leave', (_data, ack) => this._safe(ack, () => { this._leaveLobby(socket); ack?.({success:true}); }));
       socket.on('lobby:ready', (data, ack) => this._safe(ack, () => this._readyLobby(socket, data, ack)));
       socket.on('lobby:map', (data, ack) => this._safe(ack, () => this._setLobbyMap(socket, data, ack)));
+      socket.on('lobby:difficulty', (data, ack) => this._safe(ack, () => this._setLobbyDifficulty(socket, data, ack)));
       socket.on('lobby:start', (_data, ack) => this._safe(ack, () => this._startLobby(socket, ack)));
 
       socket.on('player:join', (data, ack) => this._routeGame(socket, ack, g => g._handleJoin(socket, data, ack)));
@@ -65,6 +66,9 @@ class GameServer {
       socket.on('player:revive:start', (data, ack) => this._routeGame(socket, ack, g => g._handleReviveStart(socket, data, ack)));
       socket.on('player:revive:cancel', (data, ack) => this._routeGame(socket, ack, g => g._handleReviveCancel(socket, data, ack)));
       socket.on('player:respawn', (_data, ack) => this._routeGame(socket, ack, g => g._handleRespawn(socket, ack)));
+      socket.on('player:use-item', (data, ack) => this._routeGame(socket, ack, g => g._handleUseItem(socket, data, ack)));
+      socket.on('game:pause', (data, ack) => this._routeGame(socket, ack, g => g._handlePause(socket, data, ack)));
+      socket.on('chat:send', (data, ack) => this._routeGame(socket, ack, g => g._handleChat(socket, data, ack)));
       socket.on('player:ping', data => this._routeGameNoAck(socket, g => g._handlePingReport(socket, data)));
       socket.on('player:leave', () => this._routeGameNoAck(socket, g => g._handleLeave(socket, false)));
       socket.on('ping:check', ack => ack?.({serverTime:Date.now()}));
@@ -189,10 +193,11 @@ class GameServer {
     return Math.random().toString(36).slice(2,2+config.LOBBY_CODE_LENGTH).toUpperCase();
   }
 
-  _newRoom(socket, mapId='city', isPublic=false) {
+  _newRoom(socket, mapId='city', isPublic=false, mode='survival', difficulty='normal') {
     const code=this._code();
     const room={
-      code, mapId:MAPS.some(m=>m.id===mapId)?mapId:'city', public:isPublic,
+      code, mapId:mode==='story'?'city':(MAPS.some(m=>m.id===mapId)?mapId:'city'), public:isPublic,
+      mode:mode==='story'?'story':'survival', difficulty:config.DIFFICULTIES?.[difficulty]?difficulty:'normal',
       hostSocketId:socket.id, members:new Map(), started:false, game:null,
       createdAt:Date.now(), lastActivityAt:Date.now(),
     };
@@ -208,7 +213,7 @@ class GameServer {
     if(!room)return null;
     return {
       code:room.code,mapId:room.mapId,hostId:room.hostSocketId,started:room.started,public:room.public,
-      maps:MAPS,
+      mode:room.mode||'survival',difficulty:room.difficulty||'normal',difficulties:Object.values(config.DIFFICULTIES).map(d=>({id:d.id,name:d.name,hudRestricted:!!d.hudRestricted})),maps:MAPS,
       members:[...room.members.values()].map(m=>({...m,isHost:m.socketId===room.hostSocketId})),
       canStart:room.members.size>0 && [...room.members.values()].every(m=>m.ready),
     };
@@ -234,7 +239,7 @@ class GameServer {
 
   _createLobby(socket, data, ack, isPublic=false) {
     const account=this._requireAccount(socket,ack); if(!account)return;
-    const room=this._newRoom(socket,String(data?.mapId||'city'),isPublic);
+    const room=this._newRoom(socket,String(data?.mapId||'city'),isPublic,String(data?.mode||'survival'),String(data?.difficulty||'normal'));
     this._attachToRoom(socket,room,account,false);
     this._broadcastLobby(room);
     ack?.({success:true,lobby:this._roomSnapshot(room)});
@@ -242,12 +247,13 @@ class GameServer {
 
   _quickLobby(socket, data, ack) {
     const account=this._requireAccount(socket,ack); if(!account)return;
-    let room=[...this.rooms.values()].find(r=>r.public && r.members.size<Math.min(config.LOBBY_MAX_PLAYERS,4));
-    if(!room)room=this._newRoom(socket,String(data?.mapId||'city'),true);
+    const wantMode=String(data?.mode||'survival')==='story'?'story':'survival', wantDifficulty=config.DIFFICULTIES?.[String(data?.difficulty||'normal')]?String(data?.difficulty||'normal'):'normal';
+    let room=[...this.rooms.values()].find(r=>r.public && !r.started && r.mode===wantMode && r.difficulty===wantDifficulty && r.members.size<Math.min(config.LOBBY_MAX_PLAYERS,4));
+    if(!room)room=this._newRoom(socket,String(data?.mapId||'city'),true,String(data?.mode||'survival'),String(data?.difficulty||'normal'));
     this._attachToRoom(socket,room,account,true);
     if(!room.started){room.started=true;room.game=new RoomGame(this.io,room,this.accounts);}
     this._broadcastLobby(room);
-    this.io.to(`game:${room.code}`).emit('lobby:started',{code:room.code,mapId:room.mapId});
+    this.io.to(`game:${room.code}`).emit('lobby:started',{code:room.code,mapId:room.mapId,mode:room.mode,difficulty:room.difficulty});
     ack?.({success:true,lobby:this._roomSnapshot(room),started:true});
   }
 
@@ -270,7 +276,7 @@ class GameServer {
     if(room.members.size>=config.LOBBY_MAX_PLAYERS&&!room.members.has(socket.id))return ack?.({success:false,error:'room_full'});
     this._attachToRoom(socket,room,account,true);
     this._broadcastLobby(room);
-    if(room.started)this.io.to(socket.id).emit('lobby:started',{code:room.code,mapId:room.mapId});
+    if(room.started)this.io.to(socket.id).emit('lobby:started',{code:room.code,mapId:room.mapId,mode:room.mode,difficulty:room.difficulty});
     ack?.({success:true,lobby:this._roomSnapshot(room),started:room.started});
   }
 
@@ -286,10 +292,19 @@ class GameServer {
     const room=this._roomOf(socket); if(!room)return ack?.({success:false,error:'not_in_room'});
     if(room.hostSocketId!==socket.id)return ack?.({success:false,error:'host_only'});
     if(room.started)return ack?.({success:false,error:'room_started'});
+    if(room.mode==='story')return ack?.({success:false,error:'story_map_locked'});
     const mapId=String(data?.mapId||'');
     if(!MAPS.some(m=>m.id===mapId))return ack?.({success:false,error:'invalid_map'});
     room.mapId=mapId; this._broadcastLobby(room);
     ack?.({success:true,lobby:this._roomSnapshot(room)});
+  }
+
+  _setLobbyDifficulty(socket,data,ack){
+    const room=this._roomOf(socket);if(!room)return ack?.({success:false,error:'not_in_room'});
+    if(room.hostSocketId!==socket.id)return ack?.({success:false,error:'host_only'});
+    if(room.started)return ack?.({success:false,error:'room_started'});
+    const id=String(data?.difficulty||'normal');if(!config.DIFFICULTIES[id])return ack?.({success:false,error:'invalid_difficulty'});
+    room.difficulty=id;this._broadcastLobby(room);ack?.({success:true,lobby:this._roomSnapshot(room)});
   }
 
   _startLobby(socket, ack) {
@@ -299,7 +314,7 @@ class GameServer {
     if(room.members.size<1 || ![...room.members.values()].every(m=>m.ready))return ack?.({success:false,error:'players_not_ready'});
     room.started=true; room.game=new RoomGame(this.io,room,this.accounts); room.lastActivityAt=Date.now();
     this._broadcastLobby(room);
-    this.io.to(`game:${room.code}`).emit('lobby:started',{code:room.code,mapId:room.mapId});
+    this.io.to(`game:${room.code}`).emit('lobby:started',{code:room.code,mapId:room.mapId,mode:room.mode,difficulty:room.difficulty});
     ack?.({success:true,lobby:this._roomSnapshot(room),started:true});
   }
 

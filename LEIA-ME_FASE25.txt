@@ -1,0 +1,22 @@
+ZOMBIE SURVIVAL ONLINE — FASE 25 — A VERDADE
+
+PRINCIPAIS NOVIDADES
+- Modo História com 5 capítulos conectados.
+- 5 telas de carregamento + 5 mini-cutscenes de mapa.
+- Inventário de 2 armas, medkits e granadas.
+- Perks, Caixa do Acaso e Pack MK-II/MK-III.
+- 7 armas especiais.
+- Zumbis detalhados, feridas, cadáveres e gore.
+- Eventos BLACKOUT, HORDA, SUPPLY DROP e LUA DE SANGUE.
+- Atmosfera/clima, conquistas, dificuldades, chat rápido, minimapa e pós-jogo.
+- Correção da pausa single-player em conjunto com o servidor.
+- Laboratório Ômega sincronizado com o servidor.
+
+INSTALAÇÃO DO CLIENTE
+1. Envie o conteúdo do ZIP para a raiz pública do zombiesurvival.gt.tc.
+2. NÃO substitua/apague api/config.php.
+3. Faça recarga forçada (Ctrl+Shift+R). No celular, feche a aba antiga e abra o site novamente.
+
+CACHE
+Assets: v=81
+Service Worker: zso-shell-v25-81

@@ -10,6 +10,8 @@ class RoundSystem {
 
   _computeRoundConfig(round) {
     let totalZombies = config.ROUND_BASE_ZOMBIES + (round - 1) * config.ROUND_ZOMBIES_PER_ROUND;
+    const countMultiplier = Number(this.zombieSystem?.difficulty?.zombieCount) || 1;
+    totalZombies = Math.round(totalZombies * countMultiplier);
     totalZombies = Math.min(totalZombies, 120); // total do round; vivos simultâneos continuam limitados em 60
     const bossRound = round > 0 && round % 5 === 0;
     const bossCount = bossRound ? (round >= 15 ? 2 + Math.floor((round - 15) / 10) : 1) : 0;

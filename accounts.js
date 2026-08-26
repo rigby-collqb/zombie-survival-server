@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { ACHIEVEMENTS, evaluateFromAccount } = require('./achievements');
 
 const DATA_FILE = path.join(__dirname, 'data', 'accounts.json');
 const LEGACY_DEFAULT_SIGNING_KEY = 'zso-phase20-recovery-signing-key-change-me';
@@ -17,6 +18,8 @@ const CHARACTER_SKINS = Object.freeze({
   hazmat:        { id:'hazmat',        name:'Hazmat', level:5, body:'#e4d44d' },
   military:      { id:'military',      name:'Militar', level:8, body:'#6f8d5a' },
   shadow:        { id:'shadow',        name:'Shadow', level:12, body:'#7d62a8' },
+  outbreak:      { id:'outbreak',      name:'Sobrevivente Éden', level:999, achievement:'story_complete', body:'#5bc58e' },
+  nightmare:     { id:'nightmare',     name:'Sobrevivente Pesadelo', level:999, achievement:'nightmare_10', body:'#7f3038' },
 });
 
 const WEAPON_SKINS = Object.freeze({
@@ -24,6 +27,9 @@ const WEAPON_SKINS = Object.freeze({
   rusty:   { id:'rusty', name:'Ferrugem', level:4, color:'#8c5f42' },
   gold:    { id:'gold', name:'Dourada', level:7, color:'#d9b53f' },
   neon:    { id:'neon', name:'Neon', level:10, color:'#51e6cf' },
+  crimson: { id:'crimson', name:'Carmesim', level:999, achievement:'headhunter_100', color:'#d53d42' },
+  biohazard:{ id:'biohazard', name:'Biohazard', level:999, achievement:'truth_seeker', color:'#71e25f' },
+  nightmare:{ id:'nightmare', name:'Pesadelo', level:999, achievement:'nightmare_10', color:'#b6384a' },
 });
 
 function clampInt(v, min, max) {
@@ -98,6 +104,14 @@ class AccountStore {
         revives: clampInt(stats.revives, 0, 100000000),
         highestRound: clampInt(stats.highestRound, 0, 100000),
         matches: clampInt(stats.matches, 0, 10000000),
+        deaths: clampInt(stats.deaths, 0, 10000000),
+        bossesKilled: clampInt(stats.bossesKilled, 0, 10000000),
+        shots: clampInt(stats.shots, 0, 1000000000),
+        hits: clampInt(stats.hits, 0, 1000000000),
+        timePlayedSeconds: clampInt(stats.timePlayedSeconds, 0, 1000000000),
+        storyCompletions: clampInt(stats.storyCompletions, 0, 1000000),
+        weaponKills: Object.fromEntries(Object.entries(stats.weaponKills||{}).map(([k,v])=>[String(k),clampInt(v,0,100000000)])),
+        mapsPlayed: Object.fromEntries(Object.entries(stats.mapsPlayed||{}).map(([k,v])=>[String(k),clampInt(v,0,10000000)])),
       },
       unlockedSkins: Array.isArray(raw.unlockedSkins) ? raw.unlockedSkins.filter(id => CHARACTER_SKINS[id]) : ['survivor_blue'],
       unlockedWeaponSkins: Array.isArray(raw.unlockedWeaponSkins) ? raw.unlockedWeaponSkins.filter(id => WEAPON_SKINS[id]) : ['default'],
@@ -105,6 +119,8 @@ class AccountStore {
       selectedWeaponSkin: WEAPON_SKINS[raw.selectedWeaponSkin] ? raw.selectedWeaponSkin : 'default',
       friends: uniqueIds(raw.friends),
       friendRequests: uniqueIds(raw.friendRequests),
+      achievements: uniqueIds(raw.achievements).filter(id=>ACHIEVEMENTS[id]),
+      storyProgress: Math.max(0,Math.min(5,clampInt(raw.storyProgress,0,5))),
       createdAt: Number(raw.createdAt) || Date.now(),
       updatedAt: Date.now(),
     };
@@ -118,10 +134,24 @@ class AccountStore {
 
   _applyUnlocks(a) {
     a.level = levelFromXp(a.xp);
-    for (const s of Object.values(CHARACTER_SKINS)) if (a.level >= s.level && !a.unlockedSkins.includes(s.id)) a.unlockedSkins.push(s.id);
-    for (const s of Object.values(WEAPON_SKINS)) if (a.level >= s.level && !a.unlockedWeaponSkins.includes(s.id)) a.unlockedWeaponSkins.push(s.id);
+    for (const s of Object.values(CHARACTER_SKINS)) if (!s.achievement && a.level >= s.level && !a.unlockedSkins.includes(s.id)) a.unlockedSkins.push(s.id);
+    for (const s of Object.values(WEAPON_SKINS)) if (!s.achievement && a.level >= s.level && !a.unlockedWeaponSkins.includes(s.id)) a.unlockedWeaponSkins.push(s.id);
+    for(const id of evaluateFromAccount(a)) this._grantAchievementInternal(a,id);
     if (!a.unlockedSkins.includes(a.selectedSkin)) a.selectedSkin = 'survivor_blue';
     if (!a.unlockedWeaponSkins.includes(a.selectedWeaponSkin)) a.selectedWeaponSkin = 'default';
+  }
+
+  _grantAchievementInternal(a,id){
+    const def=ACHIEVEMENTS[id];if(!a||!def||a.achievements.includes(id))return false;
+    a.achievements.push(id);a.coins=clampInt(a.coins+(def.coins||0),0,100000000);
+    if(def.skin&&CHARACTER_SKINS[def.skin]&&!a.unlockedSkins.includes(def.skin))a.unlockedSkins.push(def.skin);
+    if(def.weaponSkin&&WEAPON_SKINS[def.weaponSkin]&&!a.unlockedWeaponSkins.includes(def.weaponSkin))a.unlockedWeaponSkins.push(def.weaponSkin);
+    return true;
+  }
+
+  grantAchievement(id,achievementId){
+    const a=this.get(id);if(!a)return null;const fresh=this._grantAchievementInternal(a,String(achievementId||''));if(!fresh)return null;
+    a.updatedAt=Date.now();this._scheduleSave();return{achievement:ACHIEVEMENTS[achievementId],account:this._public(a),recovery:this._recovery(a)};
   }
 
   _scheduleSave() {
@@ -146,11 +176,12 @@ class AccountStore {
       id:a.id, friendCode:friendCodeFor(a.id), name:a.name, xp:a.xp, level:a.level, coins:a.coins,
       xpIntoLevel:Math.max(0, a.xp - currentLevelStart),
       xpForNextLevel:Math.max(1, nextLevelXp - currentLevelStart),
-      stats:{...a.stats},
+      stats:{...a.stats,accuracy:a.stats.shots?Math.round((a.stats.hits/a.stats.shots)*1000)/10:0,favoriteWeapon:Object.entries(a.stats.weaponKills||{}).sort((x,y)=>y[1]-x[1])[0]?.[0]||'pistol',favoriteMap:Object.entries(a.stats.mapsPlayed||{}).sort((x,y)=>y[1]-x[1])[0]?.[0]||'city'},
       unlockedSkins:[...a.unlockedSkins],
       unlockedWeaponSkins:[...a.unlockedWeaponSkins],
       selectedSkin:a.selectedSkin,
       selectedWeaponSkin:a.selectedWeaponSkin,
+      achievements:a.achievements.map(id=>ACHIEVEMENTS[id]).filter(Boolean),storyProgress:a.storyProgress||0,
       skins:Object.values(CHARACTER_SKINS).map(s=>({...s,unlocked:a.unlockedSkins.includes(s.id)})),
       weaponSkins:Object.values(WEAPON_SKINS).map(s=>({...s,unlocked:a.unlockedWeaponSkins.includes(s.id)})),
     };
@@ -161,7 +192,7 @@ class AccountStore {
       id:a.id, name:a.name, xp:a.xp, coins:a.coins, stats:{...a.stats},
       unlockedSkins:[...a.unlockedSkins], unlockedWeaponSkins:[...a.unlockedWeaponSkins],
       selectedSkin:a.selectedSkin, selectedWeaponSkin:a.selectedWeaponSkin,
-      friends:[...a.friends], friendRequests:[...a.friendRequests],
+      friends:[...a.friends], friendRequests:[...a.friendRequests], achievements:[...a.achievements], storyProgress:a.storyProgress||0,
       updatedAt:a.updatedAt,
     };
     return { payload, signature:signPayload(payload) };
@@ -181,6 +212,7 @@ class AccountStore {
       stats:payload.stats,
       friends:payload.friends,
       friendRequests:payload.friendRequests,
+      achievements:payload.achievements,storyProgress:payload.storyProgress,
     };
     const a = this._normalize(raw);
     this.accounts.set(a.id, a);
@@ -207,7 +239,7 @@ class AccountStore {
       a = this._normalize({
         id:crypto.randomUUID(), tokenHash:tokenHash(token), name:cleaned,
         xp:0, coins:0, stats:{}, unlockedSkins:['survivor_blue'], unlockedWeaponSkins:['default'],
-        selectedSkin:'survivor_blue', selectedWeaponSkin:'default', friends:[], friendRequests:[], createdAt:Date.now(),
+        selectedSkin:'survivor_blue', selectedWeaponSkin:'default', friends:[], friendRequests:[], achievements:[], storyProgress:0, createdAt:Date.now(),
       });
       this.accounts.set(a.id, a);
       created = true;
@@ -230,6 +262,15 @@ class AccountStore {
     if (delta.revives) a.stats.revives = clampInt(a.stats.revives + Number(delta.revives), 0, 100000000);
     if (delta.matches) a.stats.matches = clampInt(a.stats.matches + Number(delta.matches), 0, 10000000);
     if (delta.round) a.stats.highestRound = Math.max(a.stats.highestRound, clampInt(delta.round,0,100000));
+    if (delta.deaths) a.stats.deaths = clampInt(a.stats.deaths + Number(delta.deaths),0,10000000);
+    if (delta.bossesKilled) a.stats.bossesKilled = clampInt(a.stats.bossesKilled + Number(delta.bossesKilled),0,10000000);
+    if (delta.shots) a.stats.shots = clampInt(a.stats.shots + Number(delta.shots),0,1000000000);
+    if (delta.hits) a.stats.hits = clampInt(a.stats.hits + Number(delta.hits),0,1000000000);
+    if (delta.timePlayedSeconds) a.stats.timePlayedSeconds = clampInt(a.stats.timePlayedSeconds + Number(delta.timePlayedSeconds),0,1000000000);
+    if (delta.storyCompletions) a.stats.storyCompletions = clampInt(a.stats.storyCompletions + Number(delta.storyCompletions),0,1000000);
+    if (delta.storyProgress!=null) a.storyProgress=Math.max(a.storyProgress||0,clampInt(delta.storyProgress,0,5));
+    if (delta.weaponKill){const w=String(delta.weaponKill);a.stats.weaponKills[w]=clampInt((a.stats.weaponKills[w]||0)+1,0,100000000);}
+    if (delta.mapPlayed){const m=String(delta.mapPlayed);a.stats.mapsPlayed[m]=clampInt((a.stats.mapsPlayed[m]||0)+1,0,10000000);}
     a.updatedAt = Date.now();
     this._applyUnlocks(a); this._scheduleSave();
     return { account:this._public(a), recovery:this._recovery(a) };

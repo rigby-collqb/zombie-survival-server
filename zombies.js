@@ -25,11 +25,17 @@ class ZombieSystem {
     this.bossesSpawned = 0;
     this.bossCount = 0;
     this.bossPower = 1;
+    this.difficulty = config.DIFFICULTIES?.normal || {zombieHealth:1,zombieSpeed:1,zombieDamage:1,zombieCount:1};
+    this.eventModifiers = {speed:1,damage:1,spawnBurst:1};
   }
+
+  setDifficulty(id='normal') { this.difficulty = config.DIFFICULTIES?.[id] || config.DIFFICULTIES?.normal || this.difficulty; }
+  setEventModifiers(mod={}) { this.eventModifiers = {speed:Number(mod.speed)||1,damage:Number(mod.damage)||1,spawnBurst:Number(mod.spawnBurst)||1}; }
+  shiftTime(ms=0){ ms=Number(ms)||0; if(!ms)return; for(const z of this.zombies.values()){ if(z.lastAttackAt)z.lastAttackAt+=ms; if(z.deadAt)z.deadAt+=ms; } }
 
   setRoundParameters({ totalZombies, healthMultiplier, speedMultiplier, roundNumber = 0, bossCount = 0, bossPower = 1 }) {
     this.zombies.clear();
-    this.maxZombiesThisRound = totalZombies;
+    this.maxZombiesThisRound = Math.max(0, Math.round(totalZombies));
     this.healthMultiplier = healthMultiplier;
     this.speedMultiplier = speedMultiplier;
     this.roundNumber = roundNumber;
@@ -48,6 +54,12 @@ class ZombieSystem {
 
   get remainingToSpawn() {
     return Math.max(0, this.maxZombiesThisRound - this.totalSpawnedThisRound);
+  }
+
+  addHordeQuota(extra=10){
+    const n=Math.max(0,Math.min(24,Math.round(Number(extra)||0)));
+    this.maxZombiesThisRound=Math.min(144,this.maxZombiesThisRound+n);
+    return n;
   }
 
   isRoundComplete() {
@@ -106,7 +118,7 @@ class ZombieSystem {
     const type = this._pickType();
     const spec = ZOMBIE_TYPES[type];
     const bossScale = type === 'boss' ? this.bossPower : 1;
-    const maxHealth = Math.max(1, Math.round(config.ZOMBIE_BASE_HEALTH * this.healthMultiplier * spec.health * bossScale));
+    const maxHealth = Math.max(1, Math.round(config.ZOMBIE_BASE_HEALTH * this.healthMultiplier * spec.health * bossScale * (this.difficulty?.zombieHealth || 1)));
     const id = nextZombieId++;
 
     this.zombies.set(id, {
@@ -114,8 +126,8 @@ class ZombieSystem {
       x: spot.x, y: spot.y,
       health: maxHealth, maxHealth,
       radius: spec.radius,
-      speed: config.ZOMBIE_BASE_SPEED * this.speedMultiplier * spec.speed,
-      damage: Math.round(spec.damage * (type === 'boss' ? Math.min(2.2, this.bossPower) : 1)),
+      speed: config.ZOMBIE_BASE_SPEED * this.speedMultiplier * spec.speed * (this.difficulty?.zombieSpeed || 1),
+      damage: Math.round(spec.damage * (type === 'boss' ? Math.min(2.2, this.bossPower) : 1) * (this.difficulty?.zombieDamage || 1)),
       reward: Math.round(spec.reward * (type === 'boss' ? this.bossPower : 1)),
       state: 'idle', targetPlayerId: null,
       directionX: 0, directionY: 1,
@@ -130,7 +142,7 @@ class ZombieSystem {
   _ensurePopulation(alivePlayers) {
     if (this.remainingToSpawn <= 0) return;
     const room = config.MAX_ALIVE_ZOMBIES - this.aliveCount;
-    const toSpawn = Math.min(this.remainingToSpawn, room, 3);
+    const toSpawn = Math.min(this.remainingToSpawn, room, Math.max(3, Math.round(3*(this.eventModifiers?.spawnBurst||1))));
     for (let i = 0; i < toSpawn; i++) if (!this._spawnOne(alivePlayers)) break;
   }
 
@@ -182,13 +194,14 @@ class ZombieSystem {
               z.deadAt = now;
               onSpecial?.({ type: 'explode', zombie: z, radius: spec.explosionRadius, damage: spec.damage });
             } else {
-              onPlayerDamage(nearest.id, z.damage);
+              onPlayerDamage(nearest.id, Math.round(z.damage*(this.eventModifiers?.damage||1)));
             }
           }
         } else {
           z.state = 'chase';
-          const nextX = z.x + dir.x * z.speed * dt;
-          const nextY = z.y + dir.y * z.speed * dt;
+          const eventSpeed=this.eventModifiers?.speed||1;
+          const nextX = z.x + dir.x * z.speed * eventSpeed * dt;
+          const nextY = z.y + dir.y * z.speed * eventSpeed * dt;
           const moved = this.worldMap.resolveCircleMovement(z.x, z.y, nextX, nextY, z.radius);
           z.x = moved.x; z.y = moved.y;
         }
@@ -212,7 +225,7 @@ class ZombieSystem {
             z.stateTimer = config.ZOMBIE_IDLE_MIN_SECONDS + Math.random() * (config.ZOMBIE_IDLE_MAX_SECONDS - config.ZOMBIE_IDLE_MIN_SECONDS);
           } else {
             z.directionX = dir.x; z.directionY = dir.y;
-            const moved = this.worldMap.resolveCircleMovement(z.x, z.y, z.x + dir.x * z.speed * 0.5 * dt, z.y + dir.y * z.speed * 0.5 * dt, z.radius);
+            const moved = this.worldMap.resolveCircleMovement(z.x, z.y, z.x + dir.x * z.speed * (this.eventModifiers?.speed||1) * 0.5 * dt, z.y + dir.y * z.speed * (this.eventModifiers?.speed||1) * 0.5 * dt, z.radius);
             z.x = moved.x; z.y = moved.y;
           }
         }
@@ -221,6 +234,19 @@ class ZombieSystem {
       z.x = Math.max(z.radius, Math.min(config.WORLD_WIDTH - z.radius, z.x));
       z.y = Math.max(z.radius, Math.min(config.WORLD_HEIGHT - z.radius, z.y));
     }
+  }
+
+
+  damageInRadius(x,y,radius,damage){
+    const hits=[];
+    for(const z of this.zombies.values()){
+      if(z.state==='dead')continue;
+      const d=Math.hypot(z.x-x,z.y-y);if(d>radius+z.radius)continue;
+      const scale=Math.max(.28,1-d/Math.max(1,radius));
+      const result=this.applyDamage(z.id,Math.round(damage*scale));
+      if(result)hits.push({id:z.id,died:result.died,zombie:result.zombie,damage:Math.round(damage*scale)});
+    }
+    return hits;
   }
 
   applyDamage(zombieId, amount) {

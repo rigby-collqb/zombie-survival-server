@@ -1,7 +1,7 @@
 {
   "name": "zombie-survival-server",
-  "version": "22.0.0",
-  "description": "Servidor autoritativo do Zombie Survival Online - Fase 22 (5 mapas, colisao revisada, audio dinamico, social e ranking robustos)",
+  "version": "25.0.0",
+  "description": "Zombie Survival Online — Fase 25: modo história, inventário, perks, MK, eventos, armas especiais e pausa single-player",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

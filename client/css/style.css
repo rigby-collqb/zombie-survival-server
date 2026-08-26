@@ -1,0 +1,1099 @@
+/* ==========================================================
+   ZOMBIE SURVIVAL ONLINE — ESTILO GERAL
+   Paleta: preto/cinza-chumbo de fundo, vermelho sangue de destaque
+========================================================== */
+
+:root {
+  --bg-black: #0a0908;
+  --bg-dark: #121110;
+  --panel-dark: #1a1817;
+  --panel-border: #322925;
+  --blood-red: #b3231f;
+  --blood-red-bright: #e8352b;
+  --text-main: #e7e2dc;
+  --text-dim: #8f8a83;
+  --rust: #6b4a2f;
+  --safe-zone-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg-black);
+  color: var(--text-main);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* ==========================================================
+   TELA INICIAL
+========================================================== */
+
+.screen {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#main-menu {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.menu-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 30%, #1c1512 0%, #0a0908 70%);
+  z-index: 0;
+}
+
+/* textura sutil de "ruído"/poeira usando gradientes repetidos */
+.menu-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(115deg, rgba(255,255,255,0.015) 0px, rgba(255,255,255,0.015) 1px, transparent 1px, transparent 4px);
+  opacity: 0.5;
+}
+
+.menu-bg-vignette {
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0 220px 60px rgba(0,0,0,0.85);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.menu-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 42px;
+  padding: 20px;
+  text-align: center;
+}
+
+.game-title {
+  font-family: 'Impact', 'Arial Narrow Bold', sans-serif;
+  font-size: clamp(2.4rem, 8vw, 5rem);
+  letter-spacing: 4px;
+  color: var(--text-main);
+  text-shadow:
+    0 0 18px rgba(179, 35, 31, 0.55),
+    3px 3px 0 #000;
+  line-height: 1.05;
+}
+
+.game-title .accent {
+  color: var(--blood-red-bright);
+  text-shadow:
+    0 0 22px rgba(232, 53, 43, 0.85),
+    3px 3px 0 #000;
+}
+
+.game-title small {
+  display: block;
+  font-family: 'Segoe UI', sans-serif;
+  font-size: clamp(0.8rem, 2vw, 1.1rem);
+  letter-spacing: 10px;
+  color: var(--text-dim);
+  margin-top: 6px;
+}
+
+.menu-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(320px, 80vw);
+}
+
+.menu-btn {
+  padding: 14px 22px;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: var(--text-main);
+  background: linear-gradient(180deg, #201c1a, #151211);
+  border: 1px solid var(--panel-border);
+  border-left: 3px solid var(--blood-red);
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+  font-family: inherit;
+}
+
+.menu-btn:hover {
+  background: linear-gradient(180deg, #2a2422, #1a1615);
+  border-left-color: var(--blood-red-bright);
+  transform: translateX(3px);
+}
+
+.menu-btn:active {
+  transform: scale(0.98);
+}
+
+.menu-btn-primary {
+  background: linear-gradient(180deg, var(--blood-red), #7a1613);
+  border-left: 3px solid #ff5b52;
+  font-size: 1.15rem;
+  box-shadow: 0 0 22px rgba(179, 35, 31, 0.35);
+}
+
+.menu-btn-primary:hover {
+  background: linear-gradient(180deg, var(--blood-red-bright), var(--blood-red));
+}
+
+.menu-footer {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  letter-spacing: 1px;
+}
+
+/* ==========================================================
+   MODAIS (Configurações / Créditos / Pausa)
+========================================================== */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 5, 4, 0.75);
+  backdrop-filter: blur(2px);
+}
+
+.modal-box {
+  width: min(380px, 88vw);
+  background: var(--panel-dark);
+  border: 1px solid var(--panel-border);
+  border-top: 3px solid var(--blood-red);
+  padding: 28px 24px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+}
+
+.modal-box h2 {
+  font-family: 'Impact', 'Arial Narrow Bold', sans-serif;
+  letter-spacing: 3px;
+  color: var(--blood-red-bright);
+  margin-bottom: 20px;
+  font-size: 1.5rem;
+}
+
+.setting-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.setting-row-toggle {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.setting-row label {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  letter-spacing: 0.5px;
+}
+
+.setting-row input[type="text"] {
+  background: var(--bg-dark);
+  border: 1px solid var(--panel-border);
+  color: var(--text-main);
+  padding: 10px;
+  font-family: inherit;
+}
+
+.setting-row input[type="range"] {
+  accent-color: var(--blood-red);
+}
+
+.setting-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--blood-red);
+}
+
+.credits-text {
+  color: var(--text-dim);
+  line-height: 1.6;
+  font-size: 0.9rem;
+  margin-bottom: 20px;
+}
+
+.menu-btn-close {
+  width: 100%;
+  margin-top: 6px;
+}
+
+#pause-menu .modal-box {
+  text-align: center;
+}
+
+#pause-menu .menu-buttons {
+  width: 100%;
+  margin-top: 4px;
+}
+
+/* ==========================================================
+   TELA DE JOGO / CANVAS
+========================================================== */
+
+#game-screen {
+  background: #000;
+}
+
+#game-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  touch-action: none;
+}
+
+/* ==========================================================
+   HUD
+========================================================== */
+
+#hud {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+.hud-top-left {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hud-health {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(10, 9, 8, 0.55);
+  border: 1px solid var(--panel-border);
+  border-left: 3px solid var(--blood-red);
+  padding: 6px 12px;
+}
+
+.hud-heart {
+  color: var(--blood-red-bright);
+  font-size: 1.1rem;
+  text-shadow: 0 0 8px rgba(232, 53, 43, 0.7);
+}
+
+.hud-health-bar-bg {
+  width: 120px;
+  height: 10px;
+  background: #241f1c;
+  border: 1px solid #000;
+  overflow: hidden;
+}
+
+.hud-health-bar-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #7a1613, var(--blood-red-bright));
+  transition: width 0.2s ease;
+}
+
+.hud-health-text {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  min-width: 52px;
+}
+
+.hud-player-name {
+  color: var(--text-main);
+  font-size: 0.8rem;
+  letter-spacing: 1px;
+  text-shadow: 1px 1px 2px #000;
+  padding-left: 4px;
+}
+
+.hud-top-right {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(10, 9, 8, 0.55);
+  border: 1px solid var(--panel-border);
+  border-right: 3px solid var(--blood-red);
+  padding: 6px 12px;
+}
+
+.hud-clock-text {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+}
+
+.hud-pause-btn {
+  pointer-events: auto;
+  margin-left: 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-main);
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: none;
+}
+
+.hud-bottom-hint {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  background: rgba(10, 9, 8, 0.45);
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
+.hud-hint-mobile {
+  display: none;
+}
+
+.hud-fps {
+  position: absolute;
+  top: 60px;
+  right: 16px;
+  font-size: 0.7rem;
+  color: #7bff7b;
+  background: rgba(0,0,0,0.5);
+  padding: 2px 6px;
+}
+
+/* ==========================================================
+   HUD — STATUS DE REDE (Fase 2)
+========================================================== */
+
+.hud-network-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  padding-right: 8px;
+  border-right: 1px solid var(--panel-border);
+}
+
+.hud-network-dot {
+  font-size: 0.6rem;
+  line-height: 1;
+}
+
+.hud-network-dot-offline {
+  filter: grayscale(1);
+}
+
+.hud-network-players,
+.hud-network-ping {
+  white-space: nowrap;
+}
+
+/* ==========================================================
+   OVERLAY — CONEXÃO PERDIDA (Fase 2)
+========================================================== */
+
+.connection-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 24px;
+  pointer-events: none;
+}
+
+.connection-overlay-box {
+  background: rgba(20, 8, 8, 0.9);
+  border: 1px solid var(--blood-red);
+  border-left: 4px solid var(--blood-red-bright);
+  padding: 10px 20px;
+  text-align: center;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+}
+
+.connection-overlay-title {
+  color: var(--blood-red-bright);
+  font-weight: bold;
+  letter-spacing: 1px;
+  font-size: 0.9rem;
+}
+
+.connection-overlay-subtitle {
+  color: var(--text-dim);
+  font-size: 0.75rem;
+  margin-top: 2px;
+}
+
+/* ==========================================================
+   OVERLAY — MODO PAISAGEM OBRIGATÓRIO (mobile)
+========================================================== */
+
+#orientation-lock-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--bg-black);
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+/* ==========================================================
+   FASE 3 — COMBATE (HUD de kills, kill feed, flash de dano,
+   tela de morte)
+========================================================== */
+
+.hud-kills,
+.hud-zombies,
+.hud-round {
+  color: #d8d2c8;
+  font-size: 0.85rem;
+  background: rgba(10, 9, 8, 0.4);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+/* ==========================================================
+   FASE 4 — BANNER DE ROUND (countdown / intermissão)
+========================================================== */
+
+.round-banner {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  background: rgba(10, 9, 8, 0.72);
+  border: 1px solid rgba(224, 195, 65, 0.55);
+  border-radius: 10px;
+  padding: 18px 32px;
+  pointer-events: none;
+  box-shadow: 0 0 35px rgba(224, 195, 65, 0.12);
+  backdrop-filter: blur(3px);
+  animation: roundBannerIn 0.28s ease-out;
+}
+
+@keyframes roundBannerIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.78);
+    filter: blur(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    filter: blur(0);
+  }
+}
+
+.round-banner-title {
+  color: #e0c341;
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.round-banner-subtitle {
+  color: #d8d2c8;
+  font-size: 1rem;
+  margin-top: 6px;
+}
+
+.kill-feed {
+  position: absolute;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(10, 9, 8, 0.75);
+  border: 1px solid rgba(224, 195, 65, 0.5);
+  color: #e0c341;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 6px 16px;
+  border-radius: 8px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.kill-feed.kill-feed-pop {
+  animation: killFeedPop 1.5s ease-out forwards;
+}
+
+@keyframes killFeedPop {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(-6px); }
+  12%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+  80%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.damage-flash-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(179,35,31,0) 55%, rgba(179,35,31,0.45) 100%);
+  opacity: 0;
+}
+
+.damage-flash-overlay.damage-flash-active {
+  animation: damageFlashPulse 0.35s ease-out;
+}
+
+@keyframes damageFlashPulse {
+  0%   { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.death-modal-box {
+  text-align: center;
+  border-color: rgba(179, 35, 31, 0.6);
+}
+
+.death-title {
+  color: #d9534f;
+  letter-spacing: 0.08em;
+  margin-bottom: 18px;
+}
+
+.death-respawn-countdown {
+  margin-top: 12px;
+  color: #a89f92;
+  font-size: 0.85rem;
+}
+
+.orientation-overlay-box {
+  padding: 24px;
+}
+
+.orientation-icon {
+  font-size: 2.6rem;
+  margin-bottom: 12px;
+  animation: orientation-rotate-hint 1.8s ease-in-out infinite;
+}
+
+@keyframes orientation-rotate-hint {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(90deg); }
+}
+
+.orientation-title {
+  color: var(--blood-red-bright);
+  font-size: 1.2rem;
+  letter-spacing: 2px;
+  font-weight: bold;
+}
+
+.orientation-subtitle {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  margin-top: 8px;
+  max-width: 320px;
+}
+
+/* Só força paisagem em dispositivos touch — evita bloquear janelas
+   de desktop simplesmente estreitas/altas. */
+@media (orientation: portrait) {
+  body.touch-mode #orientation-lock-overlay {
+    display: flex;
+  }
+}
+
+/* ==========================================================
+   JOYSTICK VIRTUAL
+========================================================== */
+
+.joystick-zone {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: 45vw;
+  max-width: 260px;
+  height: 45vw;
+  max-height: 260px;
+  z-index: 25;
+  display: none;
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: 0 0 calc(24px + var(--safe-zone-bottom)) 24px;
+  touch-action: none;
+}
+
+.joystick-base {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(30, 25, 23, 0.45);
+  border: 2px solid rgba(179, 35, 31, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.joystick-stick {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #d34b43, #7a1613);
+  border: 1px solid rgba(255,255,255,0.15);
+  box-shadow: 0 0 12px rgba(179, 35, 31, 0.6);
+  transform: translate(0px, 0px);
+}
+
+/* ==========================================================
+   FASE 3 — STICK DE MIRA/TIRO (mobile, canto inferior direito)
+   Mesmo padrão visual do joystick de movimento, espelhado à
+   direita — arrastar mira, segurar atira (item 21).
+========================================================== */
+
+.shoot-zone {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  width: 45vw;
+  max-width: 260px;
+  height: 45vw;
+  max-height: 260px;
+  z-index: 25;
+  display: none;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 0 24px calc(24px + var(--safe-zone-bottom)) 0;
+  touch-action: none;
+}
+
+.shoot-base {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(30, 25, 23, 0.45);
+  border: 2px solid rgba(224, 195, 65, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shoot-stick {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #e0c341, #8a6d16);
+  border: 1px solid rgba(255,255,255,0.15);
+  box-shadow: 0 0 12px rgba(224, 195, 65, 0.6);
+  transform: translate(0px, 0px);
+}
+
+/* ==========================================================
+   MODO TOQUE (aplicado via JS ao detectar dispositivo touch)
+========================================================== */
+
+body.touch-mode .joystick-zone,
+body.touch-mode .shoot-zone {
+  display: flex;
+}
+
+body.touch-mode .hud-pause-btn {
+  display: block;
+}
+
+body.touch-mode .hud-hint-desktop {
+  display: none;
+}
+
+body.touch-mode .hud-hint-mobile {
+  display: inline;
+}
+
+/* ==========================================================
+   RESPONSIVIDADE
+========================================================== */
+
+@media (max-width: 700px) {
+  .hud-health-bar-bg {
+    width: 80px;
+  }
+
+  .hud-top-left,
+  .hud-top-right {
+    padding: 5px 9px;
+  }
+
+  .modal-box {
+    padding: 22px 18px;
+  }
+}
+
+@media (orientation: portrait) and (max-width: 700px) {
+  .joystick-zone {
+    width: 40vw;
+    height: 40vw;
+  }
+}
+
+/* Celulares em paisagem (ex.: 844x390, 896x414, 915x412): altura de
+   tela pequena, então encolhe HUD/joystick para não sobrepor nada. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .hud-top-left,
+  .hud-top-right {
+    padding: 4px 8px;
+    gap: 4px;
+  }
+
+  .hud-health-bar-bg {
+    width: 90px;
+    height: 8px;
+  }
+
+  .hud-network-status {
+    gap: 6px;
+    font-size: 0.65rem;
+  }
+
+  .hud-kills,
+  .hud-zombies,
+  .hud-round {
+    font-size: 0.65rem;
+    padding: 1px 6px;
+  }
+
+  .round-banner-title {
+    font-size: 1.15rem;
+  }
+
+  .round-banner-subtitle {
+    font-size: 0.8rem;
+  }
+
+  .hud-player-name,
+  .hud-health-text {
+    font-size: 0.7rem;
+  }
+
+  .hud-bottom-hint {
+    bottom: 4px;
+    font-size: 0.65rem;
+    padding: 3px 8px;
+  }
+
+  .joystick-zone {
+    width: 34vw;
+    height: 34vw;
+    max-width: 190px;
+    max-height: 190px;
+    padding: 0 0 calc(10px + var(--safe-zone-bottom)) 14px;
+  }
+
+  .shoot-zone {
+    width: 34vw;
+    height: 34vw;
+    max-width: 190px;
+    max-height: 190px;
+    padding: 0 14px calc(10px + var(--safe-zone-bottom)) 0;
+  }
+
+  .shoot-base {
+    width: 90px;
+    height: 90px;
+  }
+
+  .shoot-stick {
+    width: 40px;
+    height: 40px;
+  }
+
+  .joystick-base {
+    width: 90px;
+    height: 90px;
+  }
+
+  .joystick-stick {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/* ==========================================================
+   FASE 5 — HUD DE COMBATE / LOOT / LOJA
+========================================================== */
+.hud-combat-panel{
+  min-width:210px;padding:7px 10px;background:rgba(10,9,8,.62);border:1px solid var(--panel-border);border-left:3px solid #d19b34;
+  display:flex;flex-direction:column;gap:4px;backdrop-filter:blur(2px)
+}
+.hud-weapon-row,.hud-progress-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.hud-weapon{font-weight:800;letter-spacing:1.2px;color:#f0e6cf;font-size:.82rem}
+.hud-ammo{font-size:1rem;font-weight:900;font-variant-numeric:tabular-nums;color:#ffd36d}
+.hud-money{font-weight:900;color:#77d47a;font-size:.76rem}
+.hud-kills,.hud-headshots,.hud-revives{font-size:.66rem;color:#bdb7ae}
+.hud-reload{font-size:.64rem;color:#ffcf68;letter-spacing:1.4px;animation:reloadPulse .55s ease-in-out infinite alternate}
+@keyframes reloadPulse{from{opacity:.45}to{opacity:1}}
+.hud-shop-btn{pointer-events:auto;border:1px solid rgba(255,204,87,.55);background:rgba(70,50,15,.72);color:#ffd45f;padding:4px 8px;font-size:.68rem;font-weight:800;cursor:pointer}
+.hud-shop-btn:hover{background:rgba(105,75,18,.82)}
+
+.shoot-base{position:relative;overflow:visible}
+.shoot-label{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:.54rem;line-height:1.05;text-align:center;color:rgba(255,233,156,.58);font-weight:900;letter-spacing:.8px;pointer-events:none;z-index:0}
+.shoot-stick{position:relative;z-index:1}
+
+.mobile-actions{position:fixed;right:142px;bottom:18px;z-index:32;display:none;grid-template-columns:repeat(2,54px);gap:7px;pointer-events:auto;touch-action:none}
+.mobile-action-btn{width:54px;height:46px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(18,17,16,.74);color:#eae4db;font-size:1rem;font-weight:900;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;box-shadow:0 2px 10px rgba(0,0,0,.35);touch-action:none}
+.mobile-action-btn small{font-size:.46rem;letter-spacing:.5px;color:#aaa49c}
+.mobile-action-btn:active{transform:scale(.94);background:rgba(75,60,35,.88)}
+.mobile-shop-btn{border-color:rgba(255,210,79,.45);color:#ffd45f}
+body.touch-mode .mobile-actions{display:grid}
+
+.loot-prompt{position:fixed;left:50%;bottom:78px;transform:translateX(-50%);z-index:34;background:rgba(9,9,8,.8);border:1px solid rgba(255,214,97,.45);padding:7px 12px;color:#ffe191;font-size:.72rem;font-weight:800;letter-spacing:.6px;pointer-events:none}
+
+.shop-modal-box{width:min(760px,92vw);max-height:84vh;overflow:auto;padding:22px}
+.shop-header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:16px}
+.shop-header h2{margin-bottom:3px}.shop-header p{font-size:.72rem;color:var(--text-dim)}
+.shop-money{font-size:1.35rem;font-weight:900;color:#75d47b;background:rgba(0,0,0,.25);padding:7px 12px;border:1px solid rgba(117,212,123,.22)}
+.shop-items{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0 14px}
+.shop-card{background:#151312;border:1px solid #332d29;padding:12px;min-height:112px;display:flex;flex-direction:column;justify-content:space-between;gap:8px}
+.shop-card-title{font-weight:900;font-size:.82rem}.shop-card-desc{font-size:.65rem;line-height:1.35;color:#99928a}.shop-card-bottom{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.shop-card-price{font-weight:900;color:#78d47d;font-size:.76rem}.shop-buy-btn{border:1px solid #57462a;background:#2d2518;color:#f1d083;font-weight:800;padding:6px 9px;cursor:pointer;font-size:.66rem}.shop-buy-btn:hover{background:#44361e}.shop-buy-btn:disabled{opacity:.4;cursor:not-allowed}
+.shop-message{min-height:20px;color:#d7c8ae;font-size:.72rem;margin-bottom:9px;text-align:center}
+.shop-rarity-common{border-top:2px solid #bfc0c0}.shop-rarity-rare{border-top:2px solid #4aa3ff}.shop-rarity-epic{border-top:2px solid #b868ff}.shop-rarity-legendary{border-top:2px solid #ffbd38}
+
+@media (orientation:landscape) and (max-height:500px){
+  .hud-combat-panel{min-width:165px;padding:4px 7px;gap:2px}.hud-weapon{font-size:.66rem}.hud-ammo{font-size:.78rem}.hud-money,.hud-kills,.hud-headshots,.hud-revives,.hud-reload{font-size:.55rem}
+  .hud-top-right{max-width:56vw;flex-wrap:wrap;justify-content:flex-end}
+  .mobile-actions{right:111px;bottom:10px;grid-template-columns:repeat(2,46px);gap:5px}.mobile-action-btn{width:46px;height:38px;font-size:.8rem;border-radius:8px}.mobile-action-btn small{font-size:.39rem}
+  .loot-prompt{bottom:54px;font-size:.58rem;padding:5px 8px}
+  .shop-modal-box{max-height:92vh;padding:12px}.shop-items{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.shop-card{min-height:82px;padding:7px}.shop-card-title{font-size:.65rem}.shop-card-desc{font-size:.52rem}.shop-buy-btn,.shop-card-price{font-size:.55rem}
+}
+@media (max-width:650px){.shop-items{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Fase 5: fallback de controles mobile. Alguns navegadores modernos usam
+   Pointer Events e podem não expor ontouchstart; pointer:coarse garante HUD. */
+@media (pointer: coarse) {
+  .joystick-zone,
+  .shoot-zone { display: flex; }
+  .mobile-actions { display: grid; }
+  .hud-pause-btn { display: block; }
+  .hud-hint-desktop { display: none; }
+  .hud-hint-mobile { display: inline; }
+}
+
+/* ==========================================================
+   FASES 6–10 — HUD, MAPA, VFX, ÁUDIO E INTERAÇÕES
+========================================================== */
+.hud-zone{margin-top:4px;font-size:.58rem;letter-spacing:1.4px;color:#9bb38e;text-transform:uppercase;text-shadow:0 1px 5px #000}
+.hud-slots-row{display:flex;gap:5px;margin-top:5px}.hud-slot{flex:1;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.26);padding:3px 5px;font-size:.54rem;color:#8f8a83;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hud-slot-active{border-color:rgba(255,210,105,.56);color:#ffd36d;background:rgba(102,74,21,.28)}
+.hud-low-ammo{margin-top:4px;font-size:.55rem;font-weight:900;color:#ff876f;letter-spacing:1px;animation:lowAmmoPulse .55s ease-in-out infinite alternate}@keyframes lowAmmoPulse{to{opacity:.45}}
+.hud-ammo.hud-ammo-low{color:#ff8a72;text-shadow:0 0 9px rgba(255,80,60,.45)}.hud-ammo.hud-ammo-empty{color:#ff3f35;animation:lowAmmoPulse .45s infinite alternate}
+.hud-health-bar-fill.low-health{background:linear-gradient(90deg,#5a0d0b,#ff3028);box-shadow:0 0 12px rgba(255,40,30,.65)}
+.hud-round-progress{width:132px;height:5px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.35);overflow:hidden}.hud-round-progress-fill{width:0;height:100%;background:linear-gradient(90deg,#7a1613,#e8352b);transition:width .18s linear}
+.hud-minimap-panel{position:absolute;top:112px;right:18px;z-index:24;width:166px;background:rgba(8,9,8,.72);border:1px solid rgba(255,255,255,.10);padding:6px;pointer-events:none;box-shadow:0 4px 18px rgba(0,0,0,.25)}.hud-minimap-title{font-size:.52rem;letter-spacing:1.5px;color:#8f8a83;margin-bottom:4px}.hud-minimap-panel canvas{display:block;width:152px;height:152px;background:#1c261b;border:1px solid rgba(255,255,255,.08)}.hud-allies{display:flex;flex-direction:column;gap:2px;margin-top:4px}.hud-ally{display:flex;justify-content:space-between;gap:8px;font-size:.52rem;color:#c8c4bd}.hud-ally-health{color:#7bd781}.hud-ally-dead{color:#d06058}
+.interaction-prompt{position:fixed;left:50%;bottom:108px;transform:translateX(-50%);z-index:35;background:rgba(8,12,8,.88);border:1px solid rgba(116,210,126,.5);padding:8px 13px;color:#9ee8a7;font-size:.72rem;font-weight:900;letter-spacing:.7px;pointer-events:none;box-shadow:0 3px 14px rgba(0,0,0,.35)}
+.low-health-vignette{position:fixed;inset:0;z-index:28;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,rgba(100,0,0,0) 43%,rgba(110,0,0,.54) 100%);transition:opacity .18s linear}.low-health-vignette.active{opacity:.72;animation:lowHealthBeat 1.1s ease-in-out infinite}@keyframes lowHealthBeat{50%{opacity:.42}}
+.generator-light-overlay{pointer-events:none}
+
+/* Melhor encaixe dos 5 botões mobile sem cobrir o stick direito. */
+.mobile-actions{right:142px;grid-template-columns:repeat(3,50px);gap:6px}.mobile-action-btn{width:50px;height:42px}
+
+@media (max-height:500px){
+  .hud-minimap-panel{top:82px;right:9px;width:118px;padding:4px}.hud-minimap-panel canvas{width:108px;height:108px}.hud-allies{display:none}.hud-minimap-title{font-size:.42rem}
+  .hud-zone{font-size:.46rem;max-width:175px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hud-round-progress{width:96px}.hud-slots-row{margin-top:2px}.hud-slot{font-size:.43rem;padding:2px 3px}
+  .mobile-actions{right:106px;bottom:8px;grid-template-columns:repeat(3,42px);gap:4px}.mobile-action-btn{width:42px;height:35px;font-size:.72rem}.mobile-action-btn small{font-size:.34rem}
+  .interaction-prompt{bottom:48px;font-size:.54rem;padding:5px 7px}.loot-prompt{bottom:25px}
+}
+@media (max-width:720px){.hud-minimap-panel{opacity:.88}.hud-allies{max-height:32px;overflow:hidden}}
+.hud-weapon-name{display:flex;align-items:center;gap:6px}.hud-weapon-icon{display:inline-flex;align-items:center;justify-content:center;width:20px;height:16px;border:1px solid rgba(255,255,255,.16);background:rgba(0,0,0,.28);color:#dbc680;font-size:.78rem;line-height:1}
+
+
+/* ==========================================================
+   FASE 11 — ESTADO CAÍDO / REVIVE
+========================================================== */
+.downed-overlay{position:fixed;inset:0;z-index:28;pointer-events:none;background:radial-gradient(circle at center,rgba(80,0,0,.02) 25%,rgba(95,0,0,.34) 100%);animation:downedPulse 1.15s ease-in-out infinite alternate}
+.downed-card{position:absolute;left:50%;top:23%;transform:translateX(-50%);text-align:center;text-shadow:0 3px 12px #000}
+.downed-title{font:900 clamp(1.5rem,4vw,2.6rem) Impact,Arial,sans-serif;letter-spacing:4px;color:#ef6658}
+.downed-status{margin-top:7px;font-size:.78rem;font-weight:900;letter-spacing:1.5px;color:#f0d5c8}
+.downed-timer-label{margin-top:14px;font-size:.55rem;letter-spacing:2px;color:#a9968e}
+.downed-timer{font:900 1.65rem Impact,Arial,sans-serif;color:#fff}
+@keyframes downedPulse{from{opacity:.63}to{opacity:1}}
+
+.revive-prompt{position:fixed;left:50%;bottom:132px;transform:translateX(-50%);z-index:38;min-width:280px;max-width:min(520px,82vw);padding:10px 14px;background:rgba(10,15,11,.9);border:1px solid rgba(111,226,129,.55);box-shadow:0 5px 22px rgba(0,0,0,.5),0 0 14px rgba(89,211,111,.12);pointer-events:none;text-align:center}
+.revive-prompt-text{font-size:.72rem;font-weight:900;letter-spacing:.7px;color:#a6efae}
+.revive-progress{height:6px;margin-top:7px;background:rgba(255,255,255,.08);overflow:hidden}
+.revive-progress-fill{height:100%;width:0;background:linear-gradient(90deg,#4aa55a,#93ef9f);box-shadow:0 0 9px rgba(116,235,132,.5);transition:width .08s linear}
+.hud-ally-downed{color:#ffd069;font-weight:900;animation:allyDownedBlink .8s ease-in-out infinite alternate}
+@keyframes allyDownedBlink{from{opacity:.55}to{opacity:1}}
+
+@media(max-width:900px) and (orientation:landscape){
+  .revive-prompt{bottom:48px;min-width:230px;padding:6px 9px}.revive-prompt-text{font-size:.52rem}.revive-progress{height:4px;margin-top:4px}
+  .downed-card{top:18%}.downed-title{font-size:1.4rem}.downed-status{font-size:.58rem}.downed-timer{font-size:1.2rem}
+}
+
+/* ==========================================================
+   FASE 20 — LOBBY / PERFIL / SCOREBOARD / MOBILE POLISH
+========================================================== */
+:root{
+  --app-height:100dvh;
+  --safe-top:env(safe-area-inset-top,0px);
+  --safe-right:env(safe-area-inset-right,0px);
+  --safe-bottom:env(safe-area-inset-bottom,0px);
+  --safe-left:env(safe-area-inset-left,0px);
+}
+html,body{height:var(--app-height);overscroll-behavior:none;touch-action:none}
+.screen{height:var(--app-height)}
+#game-screen{overflow:hidden}
+#game-canvas{width:100%;height:100%;display:block;touch-action:none}
+.modal{padding:max(10px,var(--safe-top)) max(10px,var(--safe-right)) max(10px,var(--safe-bottom)) max(10px,var(--safe-left));overflow:auto}
+.modal-box{max-height:calc(var(--app-height) - 24px);overflow:auto}
+.modal-copy{color:var(--text-dim);font-size:.88rem;line-height:1.45;margin:-6px 0 18px}
+.modal-message{min-height:20px;margin-top:8px;color:#e2b76a;font-size:.78rem}
+.setting-row select,.setting-row input[type="text"]{width:100%;background:var(--bg-dark);border:1px solid var(--panel-border);color:var(--text-main);padding:10px;font-family:inherit}
+.setting-row input:disabled{opacity:.65;cursor:not-allowed}
+
+.menu-profile-card{width:min(380px,86vw);display:flex;align-items:center;gap:12px;padding:10px 12px;background:rgba(8,8,8,.58);border:1px solid rgba(255,255,255,.09);border-left:3px solid #477d9d;text-align:left;box-shadow:0 8px 30px rgba(0,0,0,.24)}
+.menu-profile-avatar{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:#3fa9ff;color:#111;box-shadow:0 0 16px rgba(63,169,255,.25)}
+.menu-profile-copy{flex:1;min-width:0}.menu-profile-copy b{font-size:.96rem}.menu-profile-copy small{color:#aaa49d;font-size:.67rem}.menu-profile-copy #menu-profile-level{font-size:.7rem;color:#d4c27e;margin-left:6px}
+.profile-xp-track{height:5px;background:#241f1d;margin:6px 0 5px;overflow:hidden}.profile-xp-fill{height:100%;width:0;background:linear-gradient(90deg,#477d9d,#62b6df);transition:width .2s ease}
+
+.lobby-modal-box{width:min(540px,94vw)}.lobby-head,.scoreboard-head,.shop-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.lobby-head h2{margin-bottom:4px}.lobby-head p{color:var(--text-dim);font-size:.77rem}.icon-close{border:0;background:transparent;color:#bbb;font-size:28px;line-height:1;cursor:pointer;padding:0 4px}.icon-close:hover{color:#fff}
+.lobby-home{display:flex;flex-direction:column;gap:10px}.lobby-join-row{display:grid;grid-template-columns:1fr auto;gap:8px}.lobby-join-row input{background:#0d0c0b;border:1px solid #3a332f;color:#fff;padding:10px 12px;text-transform:uppercase;letter-spacing:4px;font-weight:800;text-align:center}
+.lobby-room{display:flex;flex-direction:column;gap:12px}.lobby-code-card{display:flex;align-items:center;gap:9px;background:#100f0e;border:1px solid #312b28;padding:10px 12px;color:#918b84;font-size:.72rem;letter-spacing:2px}.lobby-code-card b{font-size:1.2rem;color:#f3e7cc;letter-spacing:5px;margin-right:auto}.mini-btn{border:1px solid #4b423e;background:#1a1715;color:#ddd;padding:7px 10px;cursor:pointer;font-weight:700}.mini-btn:active{transform:scale(.96)}
+.lobby-members{display:flex;flex-direction:column;gap:6px;max-height:210px;overflow:auto}.lobby-member{display:grid;grid-template-columns:38px 1fr auto;align-items:center;gap:8px;padding:8px 10px;background:#11100f;border:1px solid #2c2724}.lobby-member-avatar{width:28px;height:28px;border-radius:50%;background:var(--skin,#3fa9ff);box-shadow:0 0 10px color-mix(in srgb,var(--skin,#3fa9ff) 40%, transparent)}.lobby-member small{display:block;color:#827c75;font-size:.62rem}.lobby-member-status{font-size:.67rem;font-weight:800;color:#d2635b}.lobby-member-status.ready{color:#75d17f}.lobby-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.lobby-actions .menu-btn:last-child{grid-column:1/-1}
+
+.profile-modal-box{width:min(600px,94vw)}.profile-stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0 18px}.profile-stats-grid>div{background:#100f0e;border:1px solid #2e2925;padding:10px;text-align:center}.profile-stats-grid b{display:block;font-size:1.1rem}.profile-stats-grid small{display:block;color:#817b75;font-size:.55rem;margin-top:4px}.profile-modal-box h3{font-size:.72rem;color:#aaa39a;letter-spacing:2px;margin:14px 0 7px}.skin-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}.skin-card{position:relative;border:1px solid #332c29;background:#121110;padding:10px;text-align:center;cursor:pointer;transition:.12s}.skin-card:hover{transform:translateY(-2px);border-color:#65534c}.skin-card.selected{border-color:#69a9c9;box-shadow:0 0 14px rgba(78,154,197,.18)}.skin-card.locked{opacity:.48;cursor:not-allowed}.skin-preview{width:42px;height:42px;margin:0 auto 7px;border-radius:50%;background:var(--skin,#777);box-shadow:0 0 14px color-mix(in srgb,var(--skin,#777) 35%, transparent)}.skin-weapon-preview{height:9px;width:58px;border-radius:6px;margin:17px auto 20px;background:var(--skin,#2a2a2a)}.skin-card b{display:block;font-size:.75rem}.skin-card small{font-size:.58rem;color:#8e8983}
+
+.kill-feed-list{position:absolute;right:max(18px,var(--safe-right));top:215px;z-index:31;width:min(360px,48vw);display:flex;flex-direction:column;align-items:flex-end;gap:5px;pointer-events:none}.kill-feed-item{max-width:100%;padding:6px 9px;background:linear-gradient(90deg,transparent,rgba(0,0,0,.64));border-right:2px solid #83766d;color:#e9e3dc;font-size:.7rem;font-weight:700;text-align:right;text-shadow:0 2px 4px #000;animation:feed-in .2s ease both}.kill-feed-item.headshot{border-color:#ffd75b;color:#ffe28a}.kill-feed-item.revive{border-color:#7bd788;color:#a9efb2}.kill-feed-item.downed,.kill-feed-item.death{border-color:#d85c55;color:#efaaa5}.kill-feed-item.boss{border-color:#ff624f;color:#ff9c8d;font-size:.8rem}.kill-feed-item.round{border-color:#d6bd72}.kill-feed-item.fade{animation:feed-out .45s ease forwards}@keyframes feed-in{from{opacity:0;transform:translateX(25px)}to{opacity:1;transform:none}}@keyframes feed-out{to{opacity:0;transform:translateX(20px)}}
+
+.scoreboard-overlay{position:fixed;inset:0;z-index:70;display:flex;justify-content:center;align-items:flex-start;padding:max(45px,calc(var(--safe-top) + 24px)) 12px 20px;background:rgba(0,0,0,.48);backdrop-filter:blur(2px);pointer-events:none}.scoreboard-card{width:min(760px,95vw);max-height:72vh;overflow:auto;background:rgba(15,14,13,.95);border:1px solid #3b322f;border-top:3px solid #b3231f;padding:18px;box-shadow:0 20px 70px rgba(0,0,0,.6)}.scoreboard-card h2{font-size:1rem;letter-spacing:2px}.scoreboard-card small{color:#746f69;font-size:.6rem}.scoreboard-columns,.scoreboard-row{display:grid;grid-template-columns:34px minmax(120px,1fr) 74px 48px 48px 48px 64px;gap:6px;align-items:center}.scoreboard-columns{font-size:.55rem;color:#7e7771;padding:10px 7px 5px}.scoreboard-row{padding:8px 7px;border-top:1px solid rgba(255,255,255,.06);font-size:.72rem}.scoreboard-row.me{background:rgba(61,126,160,.12)}.scoreboard-name{display:flex;align-items:center;gap:7px}.scoreboard-dot{width:8px;height:8px;border-radius:50%;background:var(--skin,#3fa9ff)}.scoreboard-row .dead{color:#9c5853}.scoreboard-row .downed{color:#d9b65d}.scoreboard-ping.good{color:#77d483}.scoreboard-ping.mid{color:#e0c765}.scoreboard-ping.bad{color:#df675e}
+
+.boss-overlay{position:fixed;inset:0;z-index:65;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle,rgba(120,0,0,.04),rgba(90,0,0,.28));text-align:center;animation:boss-overlay 2.1s ease both}.boss-warning{font-family:Impact,Arial Black,sans-serif;font-size:clamp(2rem,7vw,5rem);letter-spacing:5px;color:#ff4e43;text-shadow:0 0 24px rgba(255,50,40,.7),4px 4px 0 #000}.boss-overlay #boss-round-text{font-weight:900;letter-spacing:7px;color:#e1c7bd;margin-top:8px}@keyframes boss-overlay{0%{opacity:0;transform:scale(.8)}15%{opacity:1;transform:scale(1.04)}65%{opacity:1}100%{opacity:0;transform:scale(1.12)}}
+
+.spectator-status{text-align:center;color:#d5c9b8;font-size:.78rem;letter-spacing:1px;margin:2px 0 8px}.spectator-buttons{display:flex;justify-content:center;gap:8px;margin-bottom:12px}.ally-offscreen{position:absolute;z-index:24;pointer-events:none;color:#e1c751;font-size:10px;font-weight:900;text-shadow:0 2px 4px #000}
+.hud-score{color:#e2c56c}.hud-room{font-size:.58rem;color:#8f8a83}.hud-top-right{padding-top:max(0px,var(--safe-top));padding-right:max(0px,var(--safe-right))}.hud-top-left{padding-top:max(0px,var(--safe-top));padding-left:max(0px,var(--safe-left))}
+
+/* Não há mais a barra de instruções inferior. */
+.hud-bottom-hint{display:none!important}
+
+body.touch-mode .hud-top-right{top:max(7px,var(--safe-top));right:max(7px,var(--safe-right))}body.touch-mode .hud-top-left{top:max(7px,var(--safe-top));left:max(7px,var(--safe-left))}
+body.touch-mode .joystick-zone{left:max(10px,calc(var(--safe-left) + 5px));bottom:max(10px,calc(var(--safe-bottom) + 6px))}body.touch-mode .shoot-zone{right:max(10px,calc(var(--safe-right) + 5px));bottom:max(10px,calc(var(--safe-bottom) + 6px))}
+body.touch-mode .mobile-actions{right:max(112px,calc(var(--safe-right) + 104px));bottom:max(8px,calc(var(--safe-bottom) + 5px));grid-template-columns:repeat(3,clamp(39px,7.5vh,52px));gap:clamp(4px,1vh,7px)}
+body.touch-mode .mobile-action-btn{width:clamp(39px,7.5vh,52px);height:clamp(34px,6.7vh,45px);font-size:clamp(.68rem,2vh,.9rem)}body.touch-mode .mobile-action-btn small{font-size:clamp(.32rem,1.1vh,.46rem)}
+body.touch-mode #btn-fullscreen-hud{display:inline-flex}
+#btn-fullscreen-hud{min-width:34px}
+
+@media (orientation:landscape) and (max-height:520px){
+  .hud-minimap-panel{display:none}.kill-feed-list{top:150px;width:42vw}.hud-combat-panel{transform:scale(.88);transform-origin:top left}.hud-top-left{max-width:44vw}.hud-top-right{max-width:53vw}.scoreboard-card{max-height:88vh;padding:10px}.profile-modal-box{max-height:90vh}.lobby-modal-box{max-height:90vh}
+  body.touch-mode .mobile-actions{right:max(98px,calc(var(--safe-right) + 92px));grid-template-columns:repeat(3,clamp(35px,7vh,43px))}body.touch-mode .mobile-action-btn{width:clamp(35px,7vh,43px);height:clamp(30px,6vh,37px)}
+}
+@media (max-width:700px){.profile-stats-grid{grid-template-columns:repeat(2,1fr)}.scoreboard-columns,.scoreboard-row{grid-template-columns:26px minmax(90px,1fr) 55px 38px 38px 38px 48px;font-size:.58rem}.scoreboard-card{padding:10px}.lobby-modal-box,.profile-modal-box{width:96vw}}
+
+.fullscreen-note{display:block;margin:8px 0 2px;color:#817b75;font-size:.62rem;line-height:1.35;text-align:center}
+
+/* ==========================================================
+   FASE 21 — RANKING GLOBAL / AMIGOS / HUD FORÇADO
+========================================================== */
+.home-leaderboard{position:absolute;z-index:4;right:clamp(16px,4vw,64px);top:50%;transform:translateY(-50%);width:min(330px,28vw);max-height:78vh;overflow:hidden;background:linear-gradient(180deg,rgba(21,18,16,.94),rgba(8,8,8,.94));border:1px solid rgba(255,255,255,.10);border-top:3px solid #b3231f;box-shadow:0 18px 55px rgba(0,0,0,.55);padding:14px}
+.home-leaderboard-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;text-align:left}.home-leaderboard-head div{display:flex;flex-direction:column;gap:2px}.home-leaderboard-head small{font-size:.62rem;letter-spacing:2px;color:#c55}.home-leaderboard-head b{font-size:.82rem;letter-spacing:1px;color:#eee}
+.leaderboard-podium{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;align-items:end;margin-bottom:10px}.podium-card{min-width:0;text-align:center;padding:8px 5px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;align-items:center;gap:4px}.podium-1{padding-top:14px;border-color:rgba(255,211,74,.35);box-shadow:inset 0 0 22px rgba(255,204,60,.04)}.podium-medal{font-size:1rem}.podium-avatar{width:30px;height:30px;border-radius:50%;background:var(--skin,#3fa9ff);box-shadow:0 0 12px color-mix(in srgb,var(--skin,#3fa9ff) 45%,transparent);border:2px solid rgba(255,255,255,.35)}.podium-card b{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.66rem}.podium-card small{font-size:.48rem;color:#a9a19b;white-space:nowrap}
+.leaderboard-list{display:flex;flex-direction:column;gap:3px}.leaderboard-row{display:grid;grid-template-columns:30px 1fr 52px;align-items:center;gap:5px;padding:5px 7px;background:rgba(255,255,255,.025);font-size:.63rem}.leaderboard-row>span:first-child{color:#8f8781}.leaderboard-row b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.leaderboard-row>span:last-child{text-align:right;color:#d2c6af}
+.profile-friend-code,.friend-code-card{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;margin-bottom:14px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.10);font-size:.68rem;letter-spacing:1px;color:#a69d96}.profile-friend-code b,.friend-code-card b{color:#f2dfaf;font-size:.85rem;letter-spacing:2px}
+.friends-modal-box{width:min(560px,94vw);max-height:88vh;overflow:auto}.friends-modal-box h3{font-size:.72rem;letter-spacing:2px;color:#a9a099;margin:16px 0 7px}.friend-add-row{display:grid;grid-template-columns:1fr auto;gap:8px}.friend-add-row input{min-width:0;background:#0d0c0b;border:1px solid #3a322f;color:#fff;padding:11px;letter-spacing:2px;text-transform:uppercase}.friend-add-row .menu-btn{padding:10px 14px;font-size:.72rem}.friend-list{display:flex;flex-direction:column;gap:6px}.friend-row{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:9px;align-items:center;padding:8px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07)}.friend-avatar{width:30px;height:30px;border-radius:50%;background:var(--skin,#3fa9ff);border:2px solid rgba(255,255,255,.22)}.friend-copy{display:flex;flex-direction:column;min-width:0}.friend-copy b{font-size:.76rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.friend-copy small{font-size:.58rem;color:#918984}.friend-status.online,.friend-status.lobby{color:#72d77c}.friend-status.playing{color:#e5b65b}.friend-status.offline{color:#777}.friend-actions{display:flex;gap:5px}.friend-actions .mini-btn{font-size:.55rem;min-width:28px}.friend-accept{border-color:#377a42!important;color:#8be899!important}.friend-empty{padding:10px;text-align:center;color:#777;font-size:.65rem}.invite-modal-box{width:min(390px,90vw);text-align:center}.invite-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}
+.death-penalty{display:flex;flex-direction:column;gap:4px;margin:7px 0 12px;padding:9px;background:rgba(145,25,20,.12);border:1px solid rgba(230,67,55,.25);font-size:.68rem}.death-penalty:empty{display:none}.death-penalty b{color:#ef7468;letter-spacing:1px}.death-penalty span{color:#eee}.death-penalty small{color:#998f88}
+
+/* O modo escolhido nas configurações vence a detecção automática. */
+body.force-mobile-ui .joystick-zone,body.force-mobile-ui .shoot-zone{display:flex!important}body.force-mobile-ui .mobile-actions{display:grid!important}body.force-mobile-ui .hud-pause-btn{display:inline-flex!important}
+body.force-pc-ui .joystick-zone,body.force-pc-ui .shoot-zone,body.force-pc-ui .mobile-actions{display:none!important}body.force-pc-ui .hud-pause-btn{display:none!important}
+
+@media(min-width:1100px){#main-menu .menu-content{transform:translateX(-110px)}}
+@media(max-width:1000px){.home-leaderboard{right:9px;width:205px;padding:8px}.home-leaderboard-head b{font-size:.62rem}.home-leaderboard-head small{font-size:.48rem}.leaderboard-list{display:none}.podium-card{padding:5px 2px}.podium-1{padding-top:8px}.podium-avatar{width:23px;height:23px}.podium-card b{font-size:.52rem}.podium-card small{font-size:.38rem}}
+@media(max-width:760px) and (orientation:landscape){.home-leaderboard{width:175px;top:8px;transform:none;right:8px}.home-leaderboard-head{margin-bottom:5px}.home-leaderboard-head button{display:none}.leaderboard-podium{gap:3px;margin:0}.podium-card{border:0;background:rgba(0,0,0,.28)}.podium-avatar{width:18px;height:18px}.podium-medal{font-size:.72rem}.podium-card small{display:none}.game-title{max-width:58vw}}
+
+/* ==========================================================
+   FASE 22 — CAPA CINEMATOGRÁFICA DA HOME
+========================================================== */
+.menu-bg {
+  background:
+    linear-gradient(90deg, rgba(5,5,5,.90) 0%, rgba(7,5,5,.68) 42%, rgba(8,5,5,.38) 72%, rgba(5,5,5,.72) 100%),
+    linear-gradient(180deg, rgba(0,0,0,.08), rgba(0,0,0,.78)),
+    url('../assets/menu-cover.svg') center/cover no-repeat;
+  transform: scale(1.015);
+}
+.menu-bg::after {
+  content:"";
+  position:absolute;inset:0;
+  background:
+    radial-gradient(circle at 72% 32%, rgba(194,45,31,.13), transparent 28%),
+    radial-gradient(circle at 50% 115%, rgba(0,0,0,.92), transparent 50%);
+  pointer-events:none;
+}
+.menu-bg-vignette { box-shadow: inset 0 0 250px 78px rgba(0,0,0,.78); }
+#main-menu .menu-content,
+#main-menu .home-leaderboard { backdrop-filter: blur(.25px); }
+@media(max-width:760px) and (orientation:landscape){
+  .menu-bg{background-position:center 45%;}
+}
+
+
+/* FASE 22 — preview dos cinco mapas no lobby */
+.lobby-map-preview{position:relative;overflow:hidden;min-height:82px;padding:14px 15px;display:flex;flex-direction:column;justify-content:flex-end;gap:4px;border:1px solid rgba(255,255,255,.10);box-shadow:inset 0 -45px 60px rgba(0,0,0,.58),0 8px 20px rgba(0,0,0,.18);background:#171513}
+.lobby-map-preview::before{content:"";position:absolute;inset:0;opacity:.9;z-index:0;background:linear-gradient(135deg,#29211d,#100e0d)}
+.lobby-map-preview::after{content:"";position:absolute;inset:0;z-index:1;background:repeating-linear-gradient(115deg,rgba(255,255,255,.018) 0 1px,transparent 1px 5px)}
+.lobby-map-preview>b,.lobby-map-preview>small{position:relative;z-index:2}.lobby-map-preview>b{font-size:.82rem;letter-spacing:1.2px;color:#f1e5d8}.lobby-map-preview>small{font-size:.62rem;color:#b0a79e;line-height:1.35;max-width:90%}
+.lobby-map-preview[data-theme="city"]::before{background:linear-gradient(135deg,rgba(124,43,32,.7),rgba(25,26,24,.95)),linear-gradient(90deg,#2d2926,#111)}
+.lobby-map-preview[data-theme="fog"]::before{background:radial-gradient(circle at 75% 30%,rgba(202,222,218,.22),transparent 38%),linear-gradient(135deg,#51615e,#141919)}
+.lobby-map-preview[data-theme="forest"]::before{background:radial-gradient(circle at 70% 24%,rgba(112,145,79,.22),transparent 34%),linear-gradient(135deg,#263825,#0d120d)}
+.lobby-map-preview[data-theme="night"]::before{background:radial-gradient(circle at 77% 22%,rgba(76,104,146,.32),transparent 30%),linear-gradient(135deg,#182232,#090b0f)}
+.lobby-map-preview[data-theme="storm"]::before{background:linear-gradient(160deg,rgba(108,92,62,.27),transparent 45%),linear-gradient(135deg,#3d4142,#111415)}
+
+/* ============================================================
+   FASE 23 — CUTSCENE CINEMATOGRÁFICA DE ABERTURA
+   ============================================================ */
+html.intro-active,html.intro-active body{overflow:hidden!important;overscroll-behavior:none!important}
+.intro-cutscene{position:fixed;inset:0;z-index:999999;background:#000;overflow:hidden;touch-action:manipulation;user-select:none;cursor:pointer;opacity:1;transition:opacity .8s ease,filter .8s ease}
+.intro-cutscene.hidden{display:none!important}
+.intro-cutscene.intro-ending{opacity:0;filter:blur(2px)}
+.intro-canvas{position:absolute;inset:0;width:100%;height:100%;display:block;background:#000}
+.intro-timecode{position:absolute;top:max(18px,calc(env(safe-area-inset-top) + 12px));left:max(22px,calc(env(safe-area-inset-left) + 18px));z-index:4;color:rgba(255,255,255,.34);font:700 clamp(8px,1vw,11px)/1 monospace;letter-spacing:1.6px;text-shadow:0 1px 2px #000;pointer-events:none}
+.intro-timecode::before{content:"";display:inline-block;width:6px;height:6px;margin-right:8px;border-radius:50%;background:#d12a24;box-shadow:0 0 10px rgba(220,38,31,.6);vertical-align:1px;animation:intro-rec-pulse 1s steps(1) infinite}
+@keyframes intro-rec-pulse{50%{opacity:.22}}
+.intro-caption{position:absolute;z-index:4;left:max(26px,calc(env(safe-area-inset-left) + 22px));bottom:clamp(78px,13vh,120px);max-width:min(620px,70vw);pointer-events:none;text-shadow:0 2px 8px #000,0 0 24px #000}
+.intro-caption small{display:block;margin-bottom:5px;color:rgba(226,52,43,.78);font:800 clamp(8px,1vw,11px)/1.2 Arial,sans-serif;letter-spacing:3px}
+.intro-caption b{display:block;color:rgba(239,234,221,.83);font:700 clamp(12px,1.5vw,21px)/1.18 Arial,sans-serif;letter-spacing:.8px}
+.intro-skip{position:absolute;z-index:5;left:50%;bottom:max(18px,calc(env(safe-area-inset-bottom) + 14px));transform:translateX(-50%);width:max-content;max-width:88vw;text-align:center;color:rgba(255,255,255,.48);font:500 clamp(9px,1vw,12px)/1.2 Arial,sans-serif;letter-spacing:2.1px;text-transform:uppercase;text-shadow:0 2px 8px #000;pointer-events:none;animation:intro-skip-breathe 2.2s ease-in-out infinite}
+@keyframes intro-skip-breathe{0%,100%{opacity:.45}50%{opacity:.8}}
+.intro-audio-blocked::after{content:"Áudio poderá iniciar após interação por política do navegador";position:absolute;right:18px;top:18px;z-index:4;color:rgba(255,255,255,.20);font:500 8px Arial;letter-spacing:.5px;pointer-events:none}
+@media(max-width:700px){.intro-caption{bottom:62px;max-width:72vw}.intro-caption small{letter-spacing:2px}.intro-skip{bottom:max(12px,calc(env(safe-area-inset-bottom) + 8px));letter-spacing:1.3px}.intro-timecode{top:max(11px,calc(env(safe-area-inset-top) + 7px));left:max(13px,calc(env(safe-area-inset-left) + 10px))}}
+@media(prefers-reduced-motion:reduce){.intro-skip,.intro-timecode::before{animation:none}}
+.intro-audio-button{position:absolute;z-index:7;right:max(18px,calc(env(safe-area-inset-right) + 14px));top:max(18px,calc(env(safe-area-inset-top) + 12px));padding:8px 11px;border:1px solid rgba(255,255,255,.16);background:rgba(0,0,0,.42);color:rgba(255,255,255,.68);font:700 9px Arial,sans-serif;letter-spacing:1.2px;border-radius:2px;backdrop-filter:blur(5px);cursor:pointer}.intro-audio-button:hover{color:#fff;border-color:rgba(211,47,40,.55);background:rgba(58,8,7,.55)}.intro-audio-button.hidden{display:none!important}
+@media(max-width:700px){.intro-audio-button{top:max(10px,calc(env(safe-area-inset-top) + 7px));right:max(10px,calc(env(safe-area-inset-right) + 7px));font-size:8px;padding:7px 9px}}

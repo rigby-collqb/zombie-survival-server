@@ -1,0 +1,15 @@
+ZOMBIE SURVIVAL ONLINE — FASE 22 — TESTES
+
+PASSOU:
+- Sintaxe de todos os JS do cliente.
+- HTML sem IDs duplicados e sem referências de UI faltando.
+- Todos os scripts/assets referenciados existem.
+- 5 mapas exportados e hashes de colisão idênticos ao servidor.
+- Cidade: parede longa detectada mesmo perto da extremidade; movimento bloqueado corretamente.
+- Cidade: árvores com collider físico >= 20 px; movimento bloqueado no tronco.
+- Áudios MP3 válidos: menu, exploração, combate, boss e morte.
+- Seleção dinâmica de música: menu -> exploração -> combate -> boss -> morte.
+- Ranking: fallback HTTP testado quando Socket.IO falha/cold-start.
+- Bootstrap automático após conexão testado com código de amigo + ranking.
+
+Teste final necessário após deploy: navegadores/dispositivos reais + Render/InfinityFree/domínio novo.
