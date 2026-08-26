@@ -1,7 +1,7 @@
 {
   "name": "zombie-survival-server",
-  "version": "20.0.0",
-  "description": "Servidor autoritativo do Zombie Survival Online - Fases 12-20 (feed, score, bosses, lobby, skins, progressao, performance e mobile)",
+  "version": "22.0.0",
+  "description": "Servidor autoritativo do Zombie Survival Online - Fase 22 (5 mapas, colisao revisada, audio dinamico, social e ranking robustos)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

@@ -1,18 +1,18 @@
+const crypto = require('crypto');
 const config = require('./config');
 const AccountStore = require('./accounts');
 const RoomGame = require('./roomGame');
+const worldMaps = require('./worldMap');
 
-const MAPS = Object.freeze([
-  { id:'city', name:'Cidade Abandonada', description:'Visual padrão e equilibrado.' },
-  { id:'night', name:'Cidade à Noite', description:'Tema escuro, iluminação e VFX mais fortes.' },
-  { id:'fog', name:'Zona de Névoa', description:'Atmosfera de neblina e visibilidade reduzida.' },
-]);
+const MAPS = Object.freeze(worldMaps.catalog().map(m => ({ id:m.id, name:m.name, description:m.description, theme:m.theme })));
 
 class GameServer {
   constructor(io) {
     this.io = io;
     this.accounts = new AccountStore();
     this.rooms = new Map();
+    this.accountSockets = new Map();
+    this.invites = new Map();
     this._cleanupTimer = setInterval(() => this._cleanupRooms(), 30000);
     this._bind();
   }
@@ -23,7 +23,7 @@ class GameServer {
       players += r.members.size;
       if (r.started) activeRooms++;
     }
-    return { online:true, version:'20.0.0', rooms:this.rooms.size, activeRooms, players, accounts:this.accounts.accounts.size };
+    return { online:true, version:'22.0.0', rooms:this.rooms.size, activeRooms, players, accounts:this.accounts.accounts.size };
   }
 
   _safe(ack, fn) {
@@ -37,6 +37,13 @@ class GameServer {
     this.io.on('connection', socket => {
       socket.on('account:bootstrap', (data, ack) => this._safe(ack, () => this._accountBootstrap(socket, data, ack)));
       socket.on('profile:select', (data, ack) => this._safe(ack, () => this._profileSelect(socket, data, ack)));
+      socket.on('leaderboard:get', (data, ack) => this._safe(ack, () => ack?.({success:true,rows:this.accounts.leaderboard(data?.limit||20)})));
+      socket.on('social:list', (_data, ack) => this._safe(ack, () => this._socialList(socket, ack)));
+      socket.on('social:request', (data, ack) => this._safe(ack, () => this._socialRequest(socket, data, ack)));
+      socket.on('social:respond', (data, ack) => this._safe(ack, () => this._socialRespond(socket, data, ack)));
+      socket.on('social:remove', (data, ack) => this._safe(ack, () => this._socialRemove(socket, data, ack)));
+      socket.on('social:invite', (data, ack) => this._safe(ack, () => this._socialInvite(socket, data, ack)));
+      socket.on('social:invite:respond', (data, ack) => this._safe(ack, () => this._socialInviteRespond(socket, data, ack)));
 
       socket.on('lobby:create', (data, ack) => this._safe(ack, () => this._createLobby(socket, data, ack, false)));
       socket.on('lobby:quick', (data, ack) => this._safe(ack, () => this._quickLobby(socket, data, ack)));
@@ -63,9 +70,10 @@ class GameServer {
       socket.on('ping:check', ack => ack?.({serverTime:Date.now()}));
 
       socket.on('disconnect', () => {
-        // _leaveLobby repassa disconnected=true ao RoomGame, que mantém
-        // o estado da partida por uma janela curta para reconexão.
+        const accountId=socket.data?.account?.id;
         this._leaveLobby(socket, true);
+        this._untrackSocket(socket, accountId);
+        if(accountId)this._pushSocialToFriends(accountId);
       });
     });
   }
@@ -79,10 +87,48 @@ class GameServer {
     return fresh;
   }
 
+  _trackSocket(socket, account) {
+    if(!account?.id)return;
+    const oldId=socket.data?.trackedAccountId;
+    if(oldId&&oldId!==account.id)this._untrackSocket(socket,oldId);
+    socket.data.trackedAccountId=account.id;
+    let set=this.accountSockets.get(account.id);if(!set){set=new Set();this.accountSockets.set(account.id,set);}set.add(socket.id);
+  }
+
+  _untrackSocket(socket, accountId) {
+    const id=String(accountId||socket.data?.trackedAccountId||'');if(!id)return;
+    const set=this.accountSockets.get(id);if(set){set.delete(socket.id);if(!set.size)this.accountSockets.delete(id);}socket.data.trackedAccountId=null;
+  }
+
+  _socketsForAccount(accountId) {
+    const ids=this.accountSockets.get(String(accountId||''));if(!ids)return[];
+    return [...ids].map(id=>this.io.sockets.sockets.get(id)).filter(Boolean);
+  }
+
+  _presenceFor(accountId) {
+    const sockets=this._socketsForAccount(accountId);
+    if(!sockets.length)return{status:'offline',roomCode:null};
+    let status='online',roomCode=null;
+    for(const socket of sockets){
+      const room=this._roomOf(socket);if(!room)continue;
+      roomCode=room.code;
+      if(room.started){status='playing';break;}status='lobby';
+    }
+    return{status,roomCode};
+  }
+
+  _socialSnapshot(accountId) { return this.accounts.socialSnapshot(accountId,id=>this._presenceFor(id)); }
+  _pushSocial(accountId) { const s=this._socialSnapshot(accountId);for(const socket of this._socketsForAccount(accountId))socket.emit('social:update',s); }
+  _pushSocialToFriends(accountId) { const a=this.accounts.get(accountId);if(!a)return;this._pushSocial(accountId);for(const id of a.friends)this._pushSocial(id); }
+
   _accountBootstrap(socket, data, ack) {
     const result = this.accounts.bootstrap(data || {});
-    if (result.success) socket.data.account = this.accounts.get(result.account.id);
-    ack?.({...result, maps:MAPS});
+    if (result.success) {
+      socket.data.account = this.accounts.get(result.account.id);
+      this._trackSocket(socket,socket.data.account);
+    }
+    ack?.({...result, maps:MAPS, social:result.success?this._socialSnapshot(result.account.id):null, leaderboard:this.accounts.leaderboard(12)});
+    if(result.success)this._pushSocialToFriends(result.account.id);
   }
 
   _profileSelect(socket, data, ack) {
@@ -93,8 +139,45 @@ class GameServer {
       const room = this._roomOf(socket);
       room?.game?.refreshPlayerProfile(socket, result.account);
       this._broadcastLobby(room);
+      this._pushSocialToFriends(account.id);
     }
     ack?.(result);
+  }
+
+  _socialList(socket, ack){const a=this._requireAccount(socket,ack);if(!a)return;ack?.({success:true,social:this._socialSnapshot(a.id)});}
+  _socialRequest(socket,data,ack){const a=this._requireAccount(socket,ack);if(!a)return;const r=this.accounts.requestFriend(a.id,data?.code);ack?.(r);if(r.success){this._pushSocial(a.id);if(r.target?.id)this._pushSocial(r.target.id);}}
+  _socialRespond(socket,data,ack){const a=this._requireAccount(socket,ack);if(!a)return;const requesterId=String(data?.requesterId||'');const r=this.accounts.respondFriend(a.id,requesterId,data?.accept!==false);ack?.(r);if(r.success){this._pushSocial(a.id);this._pushSocial(requesterId);}}
+  _socialRemove(socket,data,ack){const a=this._requireAccount(socket,ack);if(!a)return;const friendId=String(data?.friendId||'');const r=this.accounts.removeFriend(a.id,friendId);ack?.(r);if(r.success){this._pushSocial(a.id);this._pushSocial(friendId);}}
+
+  _socialInvite(socket,data,ack){
+    const a=this._requireAccount(socket,ack);if(!a)return;
+    const friendId=String(data?.friendId||'');
+    if(!this.accounts.areFriends(a.id,friendId))return ack?.({success:false,error:'not_friends'});
+    const room=this._roomOf(socket);if(!room)return ack?.({success:false,error:'create_room_first'});
+    if(room.started)return ack?.({success:false,error:'room_started'});
+    if(room.members.size>=config.LOBBY_MAX_PLAYERS)return ack?.({success:false,error:'room_full'});
+    const targets=this._socketsForAccount(friendId);if(!targets.length)return ack?.({success:false,error:'friend_offline'});
+    const inviteId=crypto.randomUUID();
+    const invite={id:inviteId,fromAccountId:a.id,fromName:a.name,toAccountId:friendId,roomCode:room.code,mapId:room.mapId,createdAt:Date.now(),expiresAt:Date.now()+30000};
+    this.invites.set(inviteId,invite);
+    for(const target of targets)target.emit('social:invite',invite);
+    ack?.({success:true,inviteId});
+  }
+
+  _socialInviteRespond(socket,data,ack){
+    const a=this._requireAccount(socket,ack);if(!a)return;
+    const invite=this.invites.get(String(data?.inviteId||''));
+    if(!invite||invite.toAccountId!==a.id||Date.now()>invite.expiresAt){if(invite)this.invites.delete(invite.id);return ack?.({success:false,error:'invite_expired'});}
+    this.invites.delete(invite.id);
+    const accepted=data?.accept===true;
+    if(!accepted){for(const s of this._socketsForAccount(invite.fromAccountId))s.emit('social:invite:result',{inviteId:invite.id,accepted:false,name:a.name});return ack?.({success:true,accepted:false});}
+    const room=this.rooms.get(invite.roomCode);if(!room)return ack?.({success:false,error:'room_not_found'});
+    if(room.started)return ack?.({success:false,error:'room_started'});
+    if(room.members.size>=config.LOBBY_MAX_PLAYERS)return ack?.({success:false,error:'room_full'});
+    this._attachToRoom(socket,room,a,false);this._broadcastLobby(room);
+    for(const s of this._socketsForAccount(invite.fromAccountId))s.emit('social:invite:result',{inviteId:invite.id,accepted:true,name:a.name});
+    this._pushSocialToFriends(a.id);
+    ack?.({success:true,accepted:true,lobby:this._roomSnapshot(room)});
   }
 
   _code() {
@@ -135,6 +218,7 @@ class GameServer {
     if(!room)return;
     room.lastActivityAt=Date.now();
     this.io.to(`game:${room.code}`).emit('lobby:state',this._roomSnapshot(room));
+    for(const m of room.members.values())this._pushSocialToFriends(m.accountId);
   }
 
   _attachToRoom(socket, room, account, ready=false) {
@@ -145,6 +229,7 @@ class GameServer {
     room.members.set(socket.id,this._member(socket,account,ready));
     room.lastActivityAt=Date.now();
     if(!room.hostSocketId)room.hostSocketId=socket.id;
+    this._pushSocialToFriends(account.id);
   }
 
   _createLobby(socket, data, ack, isPublic=false) {
@@ -160,11 +245,7 @@ class GameServer {
     let room=[...this.rooms.values()].find(r=>r.public && r.members.size<Math.min(config.LOBBY_MAX_PLAYERS,4));
     if(!room)room=this._newRoom(socket,String(data?.mapId||'city'),true);
     this._attachToRoom(socket,room,account,true);
-    // Quick play entra numa sala pública existente (inclusive em andamento) ou cria uma nova.
-    if(!room.started){
-      room.started=true;
-      room.game=new RoomGame(this.io,room,this.accounts);
-    }
+    if(!room.started){room.started=true;room.game=new RoomGame(this.io,room,this.accounts);}
     this._broadcastLobby(room);
     this.io.to(`game:${room.code}`).emit('lobby:started',{code:room.code,mapId:room.mapId});
     ack?.({success:true,lobby:this._roomSnapshot(room),started:true});
@@ -181,7 +262,6 @@ class GameServer {
     this._broadcastLobby(room);
     ack?.({success:true,lobby:this._roomSnapshot(room)});
   }
-
 
   _resumeLobby(socket, data, ack) {
     const account=this._requireAccount(socket,ack); if(!account)return;
@@ -226,35 +306,28 @@ class GameServer {
   _roomOf(socket) { return this.rooms.get(String(socket.data?.roomCode||'')) || null; }
 
   _routeGame(socket, ack, fn) {
-    try {
-      const room=this._roomOf(socket);
-      if(!room?.started||!room.game)return ack?.({success:false,error:'game_not_started'});
-      fn(room.game);
-    } catch(err) { console.error('[game route]',err); ack?.({success:false,error:'server_error'}); }
+    try { const room=this._roomOf(socket);if(!room?.started||!room.game)return ack?.({success:false,error:'game_not_started'});fn(room.game); }
+    catch(err) { console.error('[game route]',err); ack?.({success:false,error:'server_error'}); }
   }
-  _routeGameNoAck(socket, fn) {
-    try { const room=this._roomOf(socket); if(room?.started&&room.game)fn(room.game); } catch(err){console.error('[game route]',err);}
-  }
+  _routeGameNoAck(socket, fn) { try { const room=this._roomOf(socket); if(room?.started&&room.game)fn(room.game); } catch(err){console.error('[game route]',err);} }
 
   _leaveLobby(socket, disconnected=false) {
     const room=this._roomOf(socket); if(!room)return;
+    const member=room.members.get(socket.id);
     if(room.game)room.game._handleLeave(socket, disconnected);
     room.members.delete(socket.id);
     socket.leave?.(`game:${room.code}`);
     socket.data.roomCode=null;
     if(room.hostSocketId===socket.id)room.hostSocketId=room.members.keys().next().value||null;
     room.lastActivityAt=Date.now();
-    if(room.members.size===0){
-      // Queda de rede: mantém sala/jogo por um período de graça para reconexão.
-      if(!disconnected){ room.game?.stop(); this.rooms.delete(room.code); }
-    }else this._broadcastLobby(room);
+    if(room.members.size===0){if(!disconnected){ room.game?.stop(); this.rooms.delete(room.code); }}else this._broadcastLobby(room);
+    if(member?.accountId)this._pushSocialToFriends(member.accountId);
   }
 
   _cleanupRooms() {
     const now=Date.now();
-    for(const [code,room] of this.rooms){
-      if(room.members.size===0 && now-room.lastActivityAt>config.ROOM_IDLE_DELETE_MS){room.game?.stop();this.rooms.delete(code);}
-    }
+    for(const [id,invite] of this.invites)if(now>invite.expiresAt)this.invites.delete(id);
+    for(const [code,room] of this.rooms){if(room.members.size===0 && now-room.lastActivityAt>config.ROOM_IDLE_DELETE_MS){room.game?.stop();this.rooms.delete(code);}}
   }
 }
 

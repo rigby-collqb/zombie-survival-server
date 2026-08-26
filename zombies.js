@@ -1,4 +1,3 @@
-const worldMap = require('./worldMap');
 const config = require('./config');
 
 let nextZombieId = 1;
@@ -13,7 +12,9 @@ const ZOMBIE_TYPES = Object.freeze({
 });
 
 class ZombieSystem {
-  constructor() {
+  constructor(worldMap) {
+    if (!worldMap) throw new Error('world_map_required');
+    this.worldMap = worldMap;
     this.zombies = new Map();
     this.healthMultiplier = 1;
     this.speedMultiplier = 1;
@@ -87,7 +88,7 @@ class ZombieSystem {
 
       x = Math.max(margin, Math.min(config.WORLD_WIDTH - margin, x));
       y = Math.max(margin, Math.min(config.WORLD_HEIGHT - margin, y));
-      if (worldMap.circleHitsAnyObstacle(x, y, config.ZOMBIE_COLLISION_RADIUS + config.ZOMBIE_SPAWN_OBSTACLE_MARGIN)) continue;
+      if (this.worldMap.circleHitsAnyObstacle(x, y, config.ZOMBIE_COLLISION_RADIUS + config.ZOMBIE_SPAWN_OBSTACLE_MARGIN)) continue;
 
       let tooClose = false;
       for (const p of alivePlayers) {
@@ -166,7 +167,7 @@ class ZombieSystem {
         if (z.type === 'spitter' && nearestDist > 72 && nearestDist <= spec.spitRange) {
           z.state = 'attack';
           if (now - z.lastAttackAt >= spec.spitCooldownMs) {
-            const wall = worldMap.raycastDistanceToObstacle(z.x, z.y, dir.x, dir.y, nearestDist);
+            const wall = this.worldMap.raycastDistanceToObstacle(z.x, z.y, dir.x, dir.y, nearestDist);
             if (wall === null || wall >= nearestDist - 12) {
               z.lastAttackAt = now;
               onSpecial?.({ type: 'spit', zombie: z, player: nearest, damage: spec.damage });
@@ -188,7 +189,7 @@ class ZombieSystem {
           z.state = 'chase';
           const nextX = z.x + dir.x * z.speed * dt;
           const nextY = z.y + dir.y * z.speed * dt;
-          const moved = worldMap.resolveCircleMovement(z.x, z.y, nextX, nextY, z.radius);
+          const moved = this.worldMap.resolveCircleMovement(z.x, z.y, nextX, nextY, z.radius);
           z.x = moved.x; z.y = moved.y;
         }
       } else {
@@ -211,7 +212,7 @@ class ZombieSystem {
             z.stateTimer = config.ZOMBIE_IDLE_MIN_SECONDS + Math.random() * (config.ZOMBIE_IDLE_MAX_SECONDS - config.ZOMBIE_IDLE_MIN_SECONDS);
           } else {
             z.directionX = dir.x; z.directionY = dir.y;
-            const moved = worldMap.resolveCircleMovement(z.x, z.y, z.x + dir.x * z.speed * 0.5 * dt, z.y + dir.y * z.speed * 0.5 * dt, z.radius);
+            const moved = this.worldMap.resolveCircleMovement(z.x, z.y, z.x + dir.x * z.speed * 0.5 * dt, z.y + dir.y * z.speed * 0.5 * dt, z.radius);
             z.x = moved.x; z.y = moved.y;
           }
         }
@@ -249,8 +250,8 @@ class ZombieSystem {
       const maxAllowed = wallDistance === null ? maxDistance : Math.min(maxDistance, wallDistance);
 
       const head = this._headPoint(z);
-      const hp = worldMap.pointDistanceToRay(head.x, head.y, originX, originY, dirX, dirY, maxDistance);
-      const bp = worldMap.pointDistanceToRay(z.x, z.y, originX, originY, dirX, dirY, maxDistance);
+      const hp = this.worldMap.pointDistanceToRay(head.x, head.y, originX, originY, dirX, dirY, maxDistance);
+      const bp = this.worldMap.pointDistanceToRay(z.x, z.y, originX, originY, dirX, dirY, maxDistance);
 
       let part = null;
       let distance = Infinity;

@@ -1,0 +1,12 @@
+ZOMBIE SURVIVAL ONLINE — FASE 22 — SERVIDOR
+
+- 5 mapas realmente diferentes.
+- Colisao de paredes longas e arvores corrigida no mapa 1 e nos demais.
+- Musica ambiente original: menu/terror, exploracao, combate, boss e morte.
+- Capa cinematografica na home.
+- Ranking global com fallback HTTP e retry automatico.
+- Codigo de amigo/social recupera automaticamente quando o Render acorda.
+- Compatibilidade de recovery com chave legada e PROFILE_SIGNING_KEY_PREVIOUS.
+
+Cliente: preserve api/config.php real ao enviar para hospedagem.
+Servidor: nao versione data/accounts.json nem arquivos .zip.

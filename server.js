@@ -21,7 +21,7 @@ app.use(cors());
 
 // Healthcheck simples (Render usa isso para saber que o serviço subiu).
 app.get('/', (_req, res) => {
-  res.status(200).json(gameServer ? gameServer.status() : {online:true,version:'20.0.0'});
+  res.status(200).json(gameServer ? gameServer.status() : {online:true,version:'22.0.0'});
 });
 
 const httpServer = http.createServer(app);
@@ -34,6 +34,15 @@ const io = new Server(httpServer, {
 });
 
 const gameServer = new GameServer(io);
+
+app.get('/api/leaderboard', (req, res) => {
+  const limit = Math.max(3, Math.min(50, Number(req.query.limit) || 20));
+  res.status(200).json({ success:true, rows:gameServer.accounts.leaderboard(limit), version:'22.0.0' });
+});
+
+app.get('/api/maps', (_req, res) => {
+  res.status(200).json({ success:true, maps:GameServer.MAPS, version:'22.0.0' });
+});
 
 httpServer.listen(config.PORT, () => {
   console.log(`[server] ouvindo na porta ${config.PORT}`);

@@ -1,5 +1,5 @@
 const config = require('./config');
-const worldMap = require('./worldMap');
+const worldMaps = require('./worldMap');
 const ZombieSystem = require('./zombies');
 const RoundSystem = require('./rounds');
 const { LootSystem } = require('./loot');
@@ -13,11 +13,12 @@ class RoomGame {
     this.accounts = accounts;
     this.roomName = `game:${room.code}`;
     this.players = new Map();
-    this.zombieSystem = new ZombieSystem();
+    this.worldMap = worldMaps.create(room.mapId || 'city');
+    this.zombieSystem = new ZombieSystem(this.worldMap);
     this.roundSystem = new RoundSystem(this.zombieSystem);
     this.lootSystem = new LootSystem();
-    this.interactionSystem = new InteractionSystem();
-    worldMap.setDynamicObstacles(this.interactionSystem.getBlockingObstacles());
+    this.interactionSystem = new InteractionSystem(this.worldMap.id);
+    this.worldMap.setDynamicObstacles(this.interactionSystem.getBlockingObstacles());
     this._snapshotAccumulatorMs = 0;
     this._roundAccumulatorMs = 0;
     this._lootAccumulatorMs = 0;
@@ -28,7 +29,7 @@ class RoomGame {
   }
 
   _setWorldContext() {
-    worldMap.setDynamicObstacles(this.interactionSystem.getBlockingObstacles());
+    this.worldMap.setDynamicObstacles(this.interactionSystem.getBlockingObstacles());
   }
 
   _emitRoom(event, data) { this.io.to(this.roomName).emit(event, data); }
@@ -85,14 +86,16 @@ class RoomGame {
   }
 
   _pickPlayerSpawn() {
-    for (let attempt = 0; attempt < 30; attempt++) {
+    const spawn = this.worldMap.getSpawn();
+    const radius = Math.max(30, Number(spawn.radius) || config.SPAWN_RADIUS);
+    for (let attempt = 0; attempt < 45; attempt++) {
       const a = Math.random() * Math.PI * 2;
-      const r = Math.random() * config.SPAWN_RADIUS;
-      const x = Math.max(40, Math.min(config.WORLD_WIDTH - 40, config.SPAWN_CENTER_X + Math.cos(a) * r));
-      const y = Math.max(40, Math.min(config.WORLD_HEIGHT - 40, config.SPAWN_CENTER_Y + Math.sin(a) * r));
-      if (!worldMap.circleHitsAnyObstacle(x, y, config.PLAYER_COLLISION_RADIUS + 10)) return { x, y };
+      const r = Math.random() * radius;
+      const x = Math.max(40, Math.min(this.worldMap.width - 40, Number(spawn.x) + Math.cos(a) * r));
+      const y = Math.max(40, Math.min(this.worldMap.height - 40, Number(spawn.y) + Math.sin(a) * r));
+      if (!this.worldMap.circleHitsAnyObstacle(x, y, config.PLAYER_COLLISION_RADIUS + 10)) return { x, y };
     }
-    return { x: config.SPAWN_CENTER_X, y: config.SPAWN_CENTER_Y };
+    return { x: Number(spawn.x) || config.SPAWN_CENTER_X, y: Number(spawn.y) || config.SPAWN_CENTER_Y };
   }
 
   _playerSpeed(p) {
@@ -193,7 +196,7 @@ class RoomGame {
         id: socket.id, socketId: socket.id, accountId:account?.id||null, name,
         x: spawn.x, y: spawn.y, direction: 'down', moving: false, vx: 0, vy: 0,
         aimDirX: 0, aimDirY: 1,
-        health: 100, maxHealth: 100, alive: true, downed: false,
+        health: 100, maxHealth: 100, alive: true, downed: false, invulnerableUntil:0,
         bleedOutEndAt: 0, reviveBy: null, reviveStartedAt: 0,
         kills: 0, headshots: 0, revives: 0, money: 0, score:0, ping:null,
         skinId:account?.selectedSkin||'survivor_blue', weaponSkinId:account?.selectedWeaponSkin||'default',
@@ -246,7 +249,7 @@ class RoomGame {
     const oldCy = p.y + config.PLAYER_COLLISION_RADIUS;
     const targetCx = fx + config.PLAYER_COLLISION_RADIUS;
     const targetCy = fy + config.PLAYER_COLLISION_RADIUS;
-    const resolved = worldMap.resolveCircleMovement(oldCx, oldCy, targetCx, targetCy, config.PLAYER_COLLISION_RADIUS);
+    const resolved = this.worldMap.resolveCircleMovement(oldCx, oldCy, targetCx, targetCy, config.PLAYER_COLLISION_RADIUS);
     p.x = resolved.x - config.PLAYER_COLLISION_RADIUS;
     p.y = resolved.y - config.PLAYER_COLLISION_RADIUS;
     p.direction = typeof data.direction === 'string' ? data.direction : p.direction;
@@ -331,7 +334,7 @@ class RoomGame {
 
     for (let pellet = 0; pellet < weapon.pellets; pellet++) {
       const dir = this._spreadDirection(baseX, baseY, weapon.spread);
-      const wallDistance = worldMap.raycastDistanceToObstacle(originX, originY, dir.x, dir.y, weapon.range);
+      const wallDistance = this.worldMap.raycastDistanceToObstacle(originX, originY, dir.x, dir.y, weapon.range);
       const hit = this.zombieSystem.findHitZombie(originX, originY, dir.x, dir.y, weapon.range, wallDistance);
       let endDistance = wallDistance ?? weapon.range;
       let zombieId = null, headshot = false, zombieDead = false;
@@ -475,7 +478,7 @@ class RoomGame {
     if (!p || !p.alive || p.downed) return ack && ack({ success:false, error:'invalid_player' });
     const result = this.interactionSystem.interact(p, data?.id);
     if (!result.success) return ack && ack({ ...result, self:this._selfSnapshot(p) });
-    worldMap.setDynamicObstacles(this.interactionSystem.getBlockingObstacles());
+    this.worldMap.setDynamicObstacles(this.interactionSystem.getBlockingObstacles());
     this._emitRoom('world:interaction', result.item);
     const self = this._selfSnapshot(p);
     this._emitSelf(p);
@@ -525,6 +528,7 @@ class RoomGame {
     if (!target || !reviver || !target.downed) return;
     target.downed = false;
     target.health = Math.max(1, Math.round(target.maxHealth * config.REVIVE_HEALTH_RATIO));
+    target.invulnerableUntil = Date.now() + config.REVIVE_INVULNERABILITY_MS;
     target.bleedOutEndAt = 0;
     target.reviveBy = null;
     target.reviveStartedAt = 0;
@@ -534,7 +538,7 @@ class RoomGame {
     this._profileReward(reviver,{xp:config.PROFILE_XP_REVIVE,coins:config.PROFILE_COIN_REVIVE,revives:1});
     this._feed(`${reviver.name} reviveu ${target.name}`,'revive',{playerId:reviver.id,targetId:target.id});
 
-    const evt = {playerId:target.id, reviverId:reviver.id, health:target.health, maxHealth:target.maxHealth, reward:config.REVIVE_REWARD};
+    const evt = {playerId:target.id, reviverId:reviver.id, health:target.health, maxHealth:target.maxHealth, reward:config.REVIVE_REWARD, invulnerableMs:config.REVIVE_INVULNERABILITY_MS};
     this._emitRoom('player:revived', evt);
     this._emitRoom('player:update', this._publicPlayerSnapshot(target));
     this._emitRoom('player:update', this._publicPlayerSnapshot(reviver));
@@ -563,19 +567,33 @@ class RoomGame {
   _killPlayer(p, reason='damage') {
     if (!p) return;
     if (p.reviveBy) this._cancelRevive(p, 'target_dead');
+
+    const moneyBefore=Math.max(0,Number(p.money)||0);
+    const scoreBefore=Math.max(0,Number(p.score)||0);
+    const moneyLost=Math.min(moneyBefore,Math.floor(moneyBefore*config.DEATH_MONEY_LOSS_RATIO));
+    const scoreLost=Math.min(scoreBefore,Math.floor(scoreBefore*config.DEATH_SCORE_LOSS_RATIO));
+    p.money=moneyBefore-moneyLost;
+    p.score=scoreBefore-scoreLost;
+
+    // Morte total: perde armas compradas/lootadas e volta para a pistola básica.
+    const pistol=createWeaponState('pistol');
+    p.weapons={pistol};p.slots=['pistol'];p.activeSlot=0;p.activeWeaponId='pistol';
+
     p.health = 0;
     p.alive = false;
     p.downed = false;
+    p.invulnerableUntil = 0;
     p.bleedOutEndAt = 0;
     p.reviveBy = null;
     p.reviveStartedAt = 0;
     p.reloadEndAt = 0;
     p.reloadWeaponId = null;
     const socket = this.io.sockets.sockets.get(p.socketId);
-    if (socket) socket.emit('player:death', {reason});
+    const penalty={moneyLost,scoreLost,weaponsReset:true,money:p.money,score:p.score};
+    if (socket) socket.emit('player:death', {reason,penalty});
     this._emitRoom('player:update', this._publicPlayerSnapshot(p));
     this._emitSelf(p);
-    this._feed(`${p.name} morreu`,'death',{playerId:p.id,reason});
+    this._feed(`${p.name} morreu · -$${moneyLost} · -${scoreLost} PTS`,'death',{playerId:p.id,reason,moneyLost,scoreLost});
     this._emitScoreboard();
   }
 
@@ -586,7 +604,7 @@ class RoomGame {
     if (p.downed) return ack && ack({ success:false, error:'still_downed', self:this._selfSnapshot(p) });
     if (!p.alive) {
       const spawn = this._pickPlayerSpawn();
-      p.x = spawn.x; p.y = spawn.y; p.health = p.maxHealth; p.alive = true; p.downed = false;
+      p.x = spawn.x; p.y = spawn.y; p.health = p.maxHealth; p.alive = true; p.downed = false; p.invulnerableUntil=Date.now()+500;
       p.bleedOutEndAt = 0; p.reviveBy = null; p.reviveStartedAt = 0;
       p.lastStateAt = Date.now(); p.reloadEndAt = 0; p.reloadWeaponId = null;
     }
@@ -616,6 +634,7 @@ class RoomGame {
   _applyZombieDamageToPlayer(playerId, amount) {
     const p = this.players.get(playerId);
     if (!p || !p.alive || p.downed) return;
+    if (Number(p.invulnerableUntil)||0 > Date.now()) return;
     p.health = Math.max(0, p.health - Math.max(0, Number(amount) || 0));
     const socket = this.io.sockets.sockets.get(p.socketId);
     if (socket) socket.emit('player:damage', { health: p.health, maxHealth: p.maxHealth, amount });
@@ -663,7 +682,7 @@ class RoomGame {
     this.roundSystem.tick(dt, connectedPlayers.length, () => { roundChanged = true; });
     const currentRound = this.roundSystem.getState();
     if (roundChanged && this.interactionSystem.onRoundState(currentRound)) {
-      worldMap.setDynamicObstacles(this.interactionSystem.getBlockingObstacles());
+      this.worldMap.setDynamicObstacles(this.interactionSystem.getBlockingObstacles());
       this._emitRoom('world:interactions', this.interactionSystem.getSnapshot());
     }
     if(roundChanged){
