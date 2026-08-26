@@ -3,3 +3,4 @@ node_modules/
 # Runtime progression store
 data/accounts.json
 data/accounts.json.tmp
+*.zip
