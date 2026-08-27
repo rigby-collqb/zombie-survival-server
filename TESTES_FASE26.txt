@@ -1,0 +1,11 @@
+FASE 26 — TESTES EXECUTADOS
+
+OK - Todos os JS do cliente passam em node --check.
+OK - Todos os JS do servidor passam em node --check.
+OK - HTML sem IDs duplicados e todos os assets locais referenciados existem.
+OK - Single-player: _killPlayer não marca awaitingNextRound; respawn manual é recusado; tick seguinte gera game over.
+OK - Multiplayer: jogador morto fica awaitingNextRound; respawn manual é recusado; transição real de intermission -> running restaura automaticamente no novo round.
+OK - Evento player:respawned inclui posição, vida, round e limpa estado morto/caído no cliente.
+OK - Remapeamento PC testado em runtime: KeyW deixa de mover após troca; KeyZ passa a mover; recarga remapeada para KeyX dispara ação reload.
+OK - Configurações possuem editor de teclas e editor de HUD mobile com persistência em localStorage.
+OK - HUD mobile permite arrastar controles individuais e painéis principais e restaurar o padrão.

@@ -23,7 +23,7 @@ class GameServer {
       players += r.members.size;
       if (r.started) activeRooms++;
     }
-    return { online:true, version:'25.0.0', rooms:this.rooms.size, activeRooms, players, accounts:this.accounts.accounts.size };
+    return { online:true, version:'26.0.0', rooms:this.rooms.size, activeRooms, players, accounts:this.accounts.accounts.size };
   }
 
   _safe(ack, fn) {

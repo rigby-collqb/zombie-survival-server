@@ -1,0 +1,30 @@
+ZOMBIE SURVIVAL ONLINE — FASE 26 — CONTROLES & MORTE
+
+PRINCIPAIS CORREÇÕES
+- Respawn manual removido.
+- Single-player: morreu de verdade = fim da partida, sem voltar.
+- Multiplayer: se cair, ainda pode ser revivido. Se sangrar até morrer e pelo menos um aliado sobreviver, vira espectador e volta automaticamente no próximo round.
+- Se toda a equipe morrer, continua sendo game over.
+- O retorno do multiplayer agora é autoritativo: servidor escolhe spawn, restaura vida/estado, envia player:respawned e sincroniza cliente/remotos. Isso elimina o fluxo antigo que podia deixar o personagem invisível após respawn.
+
+CONTROLES DO PC
+- Configurações agora possuem editor real de teclas.
+- Movimento, recarga, slots, usar/reviver, pegar, loja, medkit, granada, minimapa, inventário, chat, placar, espectador e pause podem ser remapeados.
+- Conflitos de tecla são resolvidos automaticamente: a ação antiga volta para a tecla padrão.
+- HUD de slots, medkit, granada e prompts E/F acompanha as novas teclas.
+
+HUD MOBILE EDITÁVEL
+- Configurações > EDITAR HUD MOBILE.
+- É possível arrastar joystick, mira/tiro, pause, cada botão mobile individualmente, HUD superior esquerdo/direito, minimapa e objetivos.
+- Posições são salvas em localStorage em coordenadas relativas à tela, então continuam proporcionais após mudança de resolução/orientação.
+- RESTAURAR HUD volta ao layout original.
+
+CACHE
+- Assets: ?v=90
+- Service Worker: zso-shell-v26-90
+
+INSTALAÇÃO
+1. Atualize primeiro o servidor no Render/GitHub.
+2. Depois envie o cliente para a raiz pública de zombiesurvival.gt.tc.
+3. Preserve api/config.php.
+4. Faça Ctrl+Shift+R no PC; no celular feche a aba antiga e abra novamente.

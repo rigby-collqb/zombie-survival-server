@@ -177,7 +177,7 @@ class RoomGame {
       id: p.id, name: p.name, x: p.x, y: p.y,
       direction: p.direction, moving: p.moving, vx: p.vx, vy: p.vy,
       aimDirX: p.aimDirX, aimDirY: p.aimDirY,
-      health: p.health, maxHealth: p.maxHealth, alive: p.alive, downed: p.downed === true,
+      health: p.health, maxHealth: p.maxHealth, alive: p.alive, downed: p.downed === true, awaitingNextRound: p.awaitingNextRound === true,
       weaponId: p.activeWeaponId, weaponLevel: p.weaponLevels?.[p.activeWeaponId] || 0,
       ping: p.ping ?? null, score: p.score || 0,
       skinId: p.skinId || 'survivor_blue', weaponSkinId: p.weaponSkinId || 'default',
@@ -190,7 +190,7 @@ class RoomGame {
     const active = p.weapons[p.activeWeaponId] || createWeaponState('pistol');
     return {
       id: p.id,
-      health: p.health, maxHealth: p.maxHealth, alive: p.alive,
+      health: p.health, maxHealth: p.maxHealth, alive: p.alive, awaitingNextRound: p.awaitingNextRound === true,
       kills: p.kills, headshots: p.headshots, revives: p.revives || 0, money: p.money, score:p.score||0,
       downed: p.downed === true, bleedOutEndAt: p.bleedOutEndAt || 0,
       bleedOutRemainingMs: p.downed ? Math.max(0, (p.bleedOutEndAt || 0) - Date.now()) : 0,
@@ -271,7 +271,7 @@ class RoomGame {
         id: socket.id, socketId: socket.id, accountId:account?.id||null, name,
         x: spawn.x, y: spawn.y, direction: 'down', moving: false, vx: 0, vy: 0,
         aimDirX: 0, aimDirY: 1,
-        health: 100, maxHealth: 100, alive: true, downed: false, invulnerableUntil:0,
+        health: 100, maxHealth: 100, alive: true, downed: false, awaitingNextRound:false, invulnerableUntil:0,
         bleedOutEndAt: 0, reviveBy: null, reviveStartedAt: 0,
         kills: 0, headshots: 0, revives: 0, money: 0, score:0, ping:null,
         skinId:account?.selectedSkin||'survivor_blue', weaponSkinId:account?.selectedWeaponSkin||'default',
@@ -681,7 +681,7 @@ class RoomGame {
       this.gameOver=true;this._emitGameOver('story_complete');return;
     }
     this.room.mapId=result.chapter.mapId;this.worldMap=worldMaps.create(result.chapter.mapId);this.zombieSystem=new ZombieSystem(this.worldMap);this.zombieSystem.setDifficulty(this.difficultyId);this.roundSystem=new RoundSystem(this.zombieSystem);this.lootSystem=new LootSystem();this.lootSystem.setDropMultiplier(this.difficulty?.loot||1);this.interactionSystem=new InteractionSystem(this.worldMap.id);this.eventSystem.reset();this._setWorldContext();this._lastRoundState=this.roundSystem.getState();
-    for(const p of this.players.values()){const sp=this._pickPlayerSpawn();p.x=sp.x;p.y=sp.y;p.health=p.maxHealth;p.alive=true;p.downed=false;p.lastStateAt=Date.now();}
+    for(const p of this.players.values()){const sp=this._pickPlayerSpawn();p.x=sp.x;p.y=sp.y;p.health=p.maxHealth;p.alive=true;p.downed=false;p.awaitingNextRound=false;p.invulnerableUntil=Date.now()+1400;p.lastStateAt=Date.now();}
     this.cinematicUntil=Date.now()+config.STORY_CINEMATIC_MS;
     for(const p of this.players.values()) if(p.accountId) this._profileReward(p,{storyProgress:this.storySystem.chapterIndex+1,xp:90,coins:12});
     const payload={mapId:this.room.mapId,story:this._storySnapshot(),round:this.roundSystem.getState(),interactions:this.interactionSystem.getSnapshot(),zombies:this.zombieSystem.getSnapshot(),loot:this.lootSystem.getSnapshot(),players:[...this.players.values()].map(p=>this._publicPlayerSnapshot(p)),cinematicUntil:this.cinematicUntil};
@@ -737,6 +737,7 @@ class RoomGame {
   _completeRevive(target, reviver) {
     if (!target || !reviver || !target.downed) return;
     target.downed = false;
+    target.awaitingNextRound = false;
     target.health = Math.max(1, Math.round(target.maxHealth * config.REVIVE_HEALTH_RATIO));
     target.invulnerableUntil = Date.now() + config.REVIVE_INVULNERABILITY_MS;
     target.bleedOutEndAt = 0;
@@ -792,6 +793,9 @@ class RoomGame {
     p.health = 0;
     p.alive = false;
     p.downed = false;
+    // Em multiplayer, quem sangrar até morrer fica espectando até o próximo round.
+    // Em single-player não existe segunda chance: a morte encerra a partida.
+    p.awaitingNextRound = this._connectedCount() > 1;
     p.invulnerableUntil = 0;
     p.bleedOutEndAt = 0;
     p.reviveBy = null;
@@ -800,7 +804,7 @@ class RoomGame {
     p.reloadWeaponId = null;
     const socket = this.io.sockets.sockets.get(p.socketId);
     const penalty={moneyLost,scoreLost,weaponsReset:true,money:p.money,score:p.score};
-    if (socket) socket.emit('player:death', {reason,penalty});
+    if (socket) socket.emit('player:death', {reason,penalty,awaitingNextRound:p.awaitingNextRound===true,singlePlayer:this._connectedCount()===1});
     this._emitRoom('player:update', this._publicPlayerSnapshot(p));
     this._emitSelf(p);
     this._feed(`${p.name} morreu · -$${moneyLost} · -${scoreLost} PTS`,'death',{playerId:p.id,reason,moneyLost,scoreLost});
@@ -809,20 +813,32 @@ class RoomGame {
   }
 
   _handleRespawn(socket, ack) {
-    this._setWorldContext();
+    // Fase 26: respawn manual removido.
+    // Single-player: morte é definitiva. Multiplayer: retorno automático no próximo round.
     const p = this.players.get(socket.id);
-    if (!p) return ack && ack({ success: false, error: 'invalid_player' });
-    if (this.gameOver) return ack && ack({success:false,error:'game_over'});
-    if (p.downed) return ack && ack({ success:false, error:'still_downed', self:this._selfSnapshot(p) });
-    if (!p.alive) {
+    if (!p) return ack && ack({ success:false, error:'invalid_player' });
+    return ack && ack({ success:false, error:p.awaitingNextRound ? 'wait_next_round' : 'respawn_disabled', self:this._selfSnapshot(p) });
+  }
+
+  _respawnDeadForNextRound(roundNumber) {
+    if (this._connectedCount() <= 1) return 0;
+    let count = 0;
+    for (const p of this.players.values()) {
+      if (p.connected === false || p.alive || !p.awaitingNextRound) continue;
       const spawn = this._pickPlayerSpawn();
-      p.x = spawn.x; p.y = spawn.y; p.health = p.maxHealth; p.alive = true; p.downed = false; p.invulnerableUntil=Date.now()+500;
+      p.x = spawn.x; p.y = spawn.y; p.health = p.maxHealth; p.alive = true; p.downed = false;
+      p.awaitingNextRound = false; p.invulnerableUntil = Date.now() + 1400;
       p.bleedOutEndAt = 0; p.reviveBy = null; p.reviveStartedAt = 0;
-      p.lastStateAt = Date.now(); p.reloadEndAt = 0; p.reloadWeaponId = null;
+      p.lastStateAt = Date.now(); p.reloadEndAt = 0; p.reloadWeaponId = null; p.moving=false; p.vx=0; p.vy=0;
+      const evt={playerId:p.id,x:p.x,y:p.y,health:p.health,maxHealth:p.maxHealth,round:roundNumber,invulnerableMs:1400};
+      const sock=this.io.sockets.sockets.get(p.socketId);
+      sock?.emit('player:respawned',evt);
+      this._emitRoom('player:update',this._publicPlayerSnapshot(p));
+      this._emitSelf(p);
+      count++;
     }
-    ack && ack({ success: true, player: { x: p.x, y: p.y, health: p.health, maxHealth: p.maxHealth, alive: true }, self: this._selfSnapshot(p) });
-    socket.to(this.roomName).emit('player:update', this._publicPlayerSnapshot(p));
-    this._emitScoreboard();
+    if(count){this._feed(`${count} sobrevivente${count===1?' voltou':'s voltaram'} para o ROUND ${roundNumber}`,'respawn',{round:roundNumber,count});this._emitScoreboard();}
+    return count;
   }
 
   _handleLeave(socket, disconnected=false) {
@@ -909,6 +925,7 @@ class RoomGame {
         for(const p of connectedPlayers){if(previousRound.number>=20)this._awardAchievement(p,'round_20');if(this.difficultyId==='nightmare'&&previousRound.number>=10)this._awardAchievement(p,'nightmare_10');}
       }
       if(currentRound.state==='running'&&previousRound.state!=='running'){
+        this._respawnDeadForNextRound(currentRound.number);
         if(currentRound.bossRound){this._emitRoom('boss:incoming',{round:currentRound.number,count:currentRound.bossCount||1});this._feed(`⚠ BOSS INCOMING · ROUND ${currentRound.number} ⚠`,'boss',{round:currentRound.number});}
         else this._feed(`ROUND ${currentRound.number} COMEÇOU`,'round',{round:currentRound.number});
       }

@@ -1,7 +1,7 @@
 {
   "name": "zombie-survival-server",
-  "version": "25.0.0",
-  "description": "Zombie Survival Online — Fase 25: modo história, inventário, perks, MK, eventos, armas especiais e pausa single-player",
+  "version": "26.0.0",
+  "description": "Zombie Survival Online — Fase 26: morte definitiva solo, respawn por round multiplayer, teclas PC e HUD mobile editável",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

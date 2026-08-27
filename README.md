@@ -1,16 +1,15 @@
-# Zombie Survival Online — Server Fase 25
+# Zombie Survival Online — Servidor Fase 26
 
-Node.js + Express + Socket.IO. Simulação autoritativa no Render.
+## Fase 26 — Controles & Morte
 
-## Fase 25 — A Verdade
-- Modo História autoritativo em 5 capítulos e 5 mapas.
-- Objetivos em ordem, transição de capítulos e conclusão da campanha.
-- Inventário de 2 armas, medkit, granada, perks, Caixa do Acaso e MK-II/MK-III.
-- Armas especiais e tipos avançados de zumbi.
-- Eventos aleatórios e dificuldades Casual / Normal / Difícil / Pesadelo.
-- Conquistas, estatísticas, chat rápido e pós-partida.
-- Pausa real quando há exatamente 1 jogador conectado na sala. Timers, rounds, zumbis, bleedout, reload e eventos deixam de avançar e são deslocados corretamente ao retomar.
-- Em multiplayer a solicitação de pausa autoritativa é recusada e a partida continua.
-- Geometrias dos 5 mapas sincronizadas byte a byte com o cliente; o mapa final é **Laboratório Ômega** (`industrial`).
+Atualização focada em corrigir o ciclo de morte/respawn e substituir a antiga seleção PC/Mobile por personalização real de controles.
 
-Não versione `data/accounts.json`, segredos, `.env` ou arquivos ZIP dentro do repositório.
+- Single-player: morte definitiva; sem respawn.
+- Multiplayer: jogador não revivido especta e volta automaticamente no próximo round, desde que a equipe não seja eliminada.
+- Respawn manual removido e sincronização autoritativa `player:respawned`.
+- Teclas do PC remapeáveis nas Configurações.
+- HUD/controles mobile arrastáveis e salvos no dispositivo.
+- Assets do cliente: `?v=90`.
+- Cache: `zso-shell-v26-90`.
+
+Veja `LEIA-ME_FASE26.txt` e `TESTES_FASE26.txt`.
