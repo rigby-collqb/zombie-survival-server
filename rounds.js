@@ -16,6 +16,13 @@ class RoundSystem {
     const bossRound = round > 0 && round % 5 === 0;
     const bossCount = bossRound ? (round >= 15 ? 2 + Math.floor((round - 15) / 10) : 1) : 0;
     const bossPower = bossRound ? 1 + Math.max(0, Math.floor(round / 5) - 1) * 0.32 : 1;
+    const mutations=[
+      {id:'runner_rush',name:'FEBRE CARMESIM',description:'Corredores dominam a horda.'},
+      {id:'armored',name:'CARNE BLINDADA',description:'Mais infectados pesados entram na área.'},
+      {id:'toxic',name:'NÉVOA TÓXICA',description:'Cuspidores aparecem com frequência extrema.'},
+      {id:'volatile',name:'INSTABILIDADE',description:'Infectados explosivos tomam as ruas.'},
+    ];
+    const mutation = !bossRound && round >= 4 && round % 4 === 0 ? mutations[(Math.floor(round/4)-1)%mutations.length] : null;
     return {
       totalZombies,
       healthMultiplier: 1 + Math.max(0, round - 1) * config.ROUND_HEALTH_MULTIPLIER_PER_ROUND,
@@ -23,6 +30,7 @@ class RoundSystem {
       roundNumber: round,
       bossCount,
       bossPower,
+      mutation,
     };
   }
 
@@ -71,6 +79,7 @@ class RoundSystem {
       bossRound: displayNumber > 0 && displayNumber % 5 === 0,
       bossCount: displayNumber > 0 && displayNumber % 5 === 0 ? (displayNumber >= 15 ? 2 + Math.floor((displayNumber - 15) / 10) : 1) : 0,
       shopOpen: this.state === 'intermission',
+      mutation: this.zombieSystem.mutation || null,
     };
   }
 }

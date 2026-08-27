@@ -13,8 +13,8 @@ class LootSystem {
   _weaponForRarity(r){if(r==='legendary')return Math.random()<.35?'revolver':'rifle';if(r==='epic')return Math.random()<.35?'crossbow':Math.random()<.6?'shotgun':'rifle';if(r==='rare')return Math.random()<.72?'smg':'shotgun';return'smg';}
   maybeDrop(zombie){
     if(!zombie||this.items.size>=config.MAX_LOOT_ITEMS)return null;
-    const base=zombie.type==='boss'?1:(zombie.type==='tank'?0.55:0.32);if(Math.random()>Math.min(1,base*this.dropMultiplier))return null;
-    const rarity=this._rarity(),roll=Math.random();let kind='money';
+    const base=zombie.type==='boss'?1:(zombie.elite?0.68:zombie.type==='tank'?0.55:0.32);if(Math.random()>Math.min(1,base*this.dropMultiplier))return null;
+    let rarity=this._rarity();if(zombie.elite&&rarity==='common'&&Math.random()<.62)rarity='rare';if(zombie.type==='boss'&&rarity==='common')rarity='epic';const roll=Math.random();let kind='money';
     if(roll<.27)kind='ammo';else if(roll<.50)kind='money';else if(roll<.69)kind='medkit';else if(roll<.79)kind='grenade';else kind='weapon';
     let amount=0,weaponId=null;
     if(kind==='money')amount={common:25,rare:45,epic:80,legendary:150}[rarity];

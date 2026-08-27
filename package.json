@@ -1,7 +1,7 @@
 {
   "name": "zombie-survival-server",
-  "version": "26.0.0",
-  "description": "Zombie Survival Online — Fase 26: morte definitiva solo, respawn por round multiplayer, teclas PC e HUD mobile editável",
+  "version": "27.0.0",
+  "description": "Zombie Survival Online — Fase 27: elites, mutações de round, combat director, boss HUD e polimento visual",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

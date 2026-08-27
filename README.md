@@ -1,15 +1,17 @@
-# Zombie Survival Online — Servidor Fase 26
+# Zombie Survival Online — Servidor Fase 27
 
-## Fase 26 — Controles & Morte
+## Fase 27 — Combat Director
 
-Atualização focada em corrigir o ciclo de morte/respawn e substituir a antiga seleção PC/Mobile por personalização real de controles.
+- `zombie-survival-server@27.0.0`;
+- infectados ELITE: Frenético, Blindado e Praga;
+- elite escala vida/velocidade/dano/recompensa sem substituir os tipos existentes;
+- variantes de boss: Carcereiro, Carniceiro e Abominação;
+- mutações de round: Febre Carmesim, Carne Blindada, Névoa Tóxica e Instabilidade;
+- snapshot compacto transmite elite/classe/variante;
+- raycast de tiro retorna dano real por raio para feedback visual no cliente;
+- preserva regras de morte/respawn da Fase 26.
 
-- Single-player: morte definitiva; sem respawn.
-- Multiplayer: jogador não revivido especta e volta automaticamente no próximo round, desde que a equipe não seja eliminada.
-- Respawn manual removido e sincronização autoritativa `player:respawned`.
-- Teclas do PC remapeáveis nas Configurações.
-- HUD/controles mobile arrastáveis e salvos no dispositivo.
-- Assets do cliente: `?v=90`.
-- Cache: `zso-shell-v26-90`.
+### Deploy Render
+`npm install` e `npm start`; depois faça commit/push normalmente.
 
-Veja `LEIA-ME_FASE26.txt` e `TESTES_FASE26.txt`.
+Não versionar `.env`, `data/accounts.json` ou chaves.

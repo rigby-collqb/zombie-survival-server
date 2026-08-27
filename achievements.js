@@ -12,6 +12,9 @@ const ACHIEVEMENTS = Object.freeze({
   nightmare_10:{id:'nightmare_10',name:'Sem Esperança',description:'Sobreviva até o round 10 no Pesadelo.',coins:140,skin:'nightmare'},
   arsenal_master:{id:'arsenal_master',name:'Arsenal Proibido',description:'Use uma arma experimental.',coins:45},
   event_survivor:{id:'event_survivor',name:'Contra o Caos',description:'Sobreviva a um evento mundial.',coins:35},
+  elite_slayer:{id:'elite_slayer',name:'Sangue Superior',description:'Elimine um infectado ELITE.',coins:45,weaponSkin:'toxic'},
+  mutation_survivor:{id:'mutation_survivor',name:'Adaptação Forçada',description:'Sobreviva a um round de mutação.',coins:55},
+  combo_20:{id:'combo_20',name:'Sem Tirar o Dedo',description:'Faça uma sequência de 20 eliminações durante uma partida.',coins:75},
 });
 
 function evaluateFromAccount(account){

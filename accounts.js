@@ -30,6 +30,7 @@ const WEAPON_SKINS = Object.freeze({
   crimson: { id:'crimson', name:'Carmesim', level:999, achievement:'headhunter_100', color:'#d53d42' },
   biohazard:{ id:'biohazard', name:'Biohazard', level:999, achievement:'truth_seeker', color:'#71e25f' },
   nightmare:{ id:'nightmare', name:'Pesadelo', level:999, achievement:'nightmare_10', color:'#b6384a' },
+  toxic:   { id:'toxic', name:'Contaminação', level:999, achievement:'elite_slayer', color:'#72e889' },
 });
 
 function clampInt(v, min, max) {

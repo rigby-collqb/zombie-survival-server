@@ -1,0 +1,79 @@
+ZOMBIE SURVIVAL ONLINE — TESTES FASE 27
+
+TESTES EXECUTADOS LOCALMENTE ANTES DO EMPACOTAMENTO
+
+[OK] ALL_JS_SYNTAX_OK
+- Todos os 24 JavaScripts do cliente passaram por `node --check`.
+- Todos os 14 JavaScripts próprios do servidor passaram por `node --check`.
+
+[OK] MAPS_5_CLIENT_SERVER_SYNC_OK
+- city.json
+- hospital.json
+- forest.json
+- military.json
+- industrial.json
+Os arquivos usados pelo cliente e pelo servidor são byte a byte idênticos.
+
+[OK] HTML_IDS_AND_SCRIPT_ORDER_OK
+- 247 IDs encontrados no index.html.
+- 0 IDs duplicados.
+- polish.js carrega antes de game.js.
+- 24 scripts locais referenciados existem no pacote.
+
+[OK] CLIENT_ASSET_VERSION_100_OK
+- Assets locais do index usam ?v=100.
+- Service Worker usa cache zso-shell-v27-100.
+
+[OK] ROUND_MUTATION_MAPPING_OK
+- Round 4: Febre Carmesim / Runner Rush.
+- Round 8: Carne Blindada.
+- Round 12: Névoa Tóxica.
+- Round 16: Instabilidade.
+- Boss round 20 não recebe mutação comum.
+
+[OK] MUTATION_ELITE_RUNTIME_OK
+- Spawn real da lógica ZombieSystem em round mutado.
+- Infectados elite foram gerados com classes Frenético, Blindado e Praga.
+- Snapshot normal e snapshot compacto carregam elite/eliteClass/variant.
+- Composição da horda respondeu à mutação ativa.
+
+[OK] BOSS_VARIANTS_RUNTIME_OK
+- Round 5: Carcereiro.
+- Round 10: Carniceiro.
+- Round 15: Abominação.
+
+[OK] CLIENT_POLISH_RUNTIME_OK
+- Combo de eliminações.
+- Banner de mutação.
+- Medidor de ameaça.
+- Barra agregada de boss.
+- Nome da variante de boss.
+- Mira dinâmica e radio queue foram carregados sem erro no mock de DOM.
+
+[OK] PC_KEY_REMAP_RUNTIME_OK
+- Remapeamento W -> Z testado: W deixou de mover e Z passou a mover.
+- Reload R -> X testado: X disparou a ação de recarga.
+
+[OK] MOBILE_HUD_EDITOR_PERSISTENCE_STATIC_OK
+- Editor de HUD mobile presente.
+- Posições proporcionais x/y persistidas nas configurações.
+- Aplicação em vw/vh preservada.
+
+[OK] DEATH_PAUSE_RESPAWN_RUNTIME_OK
+- Single player: pausa autoritativa funciona e timers são deslocados ao retomar.
+- Single player: morte definitiva e respawn manual recusado.
+- Multiplayer: pausa autoritativa recusada.
+- Multiplayer: morto fica aguardando próximo round.
+- Respawn manual recusado enquanto aguarda.
+- Respawn automático do próximo round restaura alive/HP e emite player:respawned.
+
+[OK] ACHIEVEMENTS_COSMETICS_STATIC_OK
+- Sangue Superior / elite_slayer.
+- Adaptação Forçada / mutation_survivor.
+- Sem Tirar o Dedo / combo_20.
+- Skin de arma Contaminação vinculada à conquista de elite.
+- Paletas avançadas crimson, biohazard, nightmare e toxic presentes.
+- Visuais outbreak/nightmare presentes.
+
+LIMITAÇÃO DOS TESTES
+Não foi possível validar nesta máquina uma sessão real no domínio público + Render + celulares/PCs reais ao mesmo tempo. O diretório de dependências npm não é distribuído no ZIP; execute `npm install` no servidor antes de `npm start`, como nas fases anteriores. A lógica própria cliente/servidor foi validada localmente e com mocks/runtimes acima.

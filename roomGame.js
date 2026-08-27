@@ -100,6 +100,7 @@ class RoomGame {
       if (!p.alive || p.connected===false) continue;
       p.score = (p.score || 0) + scoreGain;
       this._profileReward(p, { xp:Math.round((config.PROFILE_XP_ROUND_BASE + roundNumber * 3)*rewardScale), coins:Math.max(1,Math.round((config.PROFILE_COIN_ROUND_BASE + Math.floor(roundNumber/2))*rewardScale)), round:roundNumber });
+      if(roundNumber>=4&&roundNumber%4===0&&roundNumber%5!==0)this._awardAchievement(p,'mutation_survivor');
       this._emitSelf(p);
     }
     this._feed(`ROUND ${roundNumber} CONCLUÍDO · +${scoreGain} PONTOS`, 'round', { round:roundNumber });
@@ -279,7 +280,7 @@ class RoomGame {
         weaponLevels:{pistol:0}, items:{medkit:1,grenade:0}, perks:{},
         upgrades: { damage: 0, reload: 0, movement: 0 },
         lastShotAt: 0, reloadEndAt: 0, reloadWeaponId: null,
-        lastChatAt:0, session:{shots:0,hits:0,bosses:0,weaponKills:{},xpEarned:0,coinsEarned:0,startedAt:now},
+        lastChatAt:0, session:{shots:0,hits:0,bosses:0,eliteKills:0,killCombo:0,lastKillAt:0,weaponKills:{},xpEarned:0,coinsEarned:0,startedAt:now},
         lastStateAt: now, connected:true, disconnectedAt:0,
       };
       this.players.set(socket.id, p);
@@ -418,12 +419,13 @@ class RoomGame {
       const dir=this._spreadDirection(baseX,baseY,weapon.spread||0);
       const wallDistance=this.worldMap.raycastDistanceToObstacle(originX,originY,dir.x,dir.y,weapon.range);
       const hit=this.zombieSystem.findHitZombie(originX,originY,dir.x,dir.y,weapon.range,wallDistance);
-      let endDistance=wallDistance??weapon.range,zombieId=null,headshot=false,zombieDead=false;
+      let endDistance=wallDistance??weapon.range,zombieId=null,headshot=false,zombieDead=false,damageDone=0;
       if(hit){
         endDistance=Math.max(0,Math.min(weapon.range,hit.distance)); zombieId=hit.zombie.id; headshot=hit.part==='head';
         const damageBoost=1+p.upgrades.damage*config.DAMAGE_UPGRADE_PER_LEVEL;
         let damage=Math.round(weapon.damage*damageBoost*(headshot?weapon.headshotMultiplier:1));
         if(weapon.effect==='flame') damage=Math.round(damage*.82 + 4);
+        damageDone=damage;
         const result=this.zombieSystem.applyDamage(zombieId,damage);
         zombieDead=result?.died===true; hitAny=true; anyHeadshot ||= headshot; p.session.hits=(p.session.hits||0)+1;
 
@@ -436,6 +438,8 @@ class RoomGame {
           const rewardScale=this.difficulty?.reward||1;
           p.money+=Math.round(((result.zombie.reward||config.KILL_REWARD)+(headshot?config.HEADSHOT_BONUS:0))*rewardScale);
           p.session.weaponKills[p.activeWeaponId]=(p.session.weaponKills[p.activeWeaponId]||0)+1;
+          const comboNow=Date.now();p.session.killCombo=(comboNow-(p.session.lastKillAt||0)<=4400)?(p.session.killCombo||0)+1:1;p.session.lastKillAt=comboNow;if(p.session.killCombo>=20)this._awardAchievement(p,'combo_20');
+          if(result.zombie.elite){p.session.eliteKills=(p.session.eliteKills||0)+1;this._awardAchievement(p,'elite_slayer');}
           const delta={xp:config.PROFILE_XP_KILL,coins:Math.max(1,Math.round(config.PROFILE_COIN_KILL*rewardScale)),kills:1,weaponKill:p.activeWeaponId};
           if(result.zombie.type==='boss'){delta.bossesKilled=1;p.session.bosses=(p.session.bosses||0)+1;}
           this._profileReward(p,delta);
@@ -443,13 +447,15 @@ class RoomGame {
           if(result.zombie.type==='boss'){
             const acc=this.accounts?.get?.(p.accountId);if((acc?.stats?.bossesKilled||0)>=10)this._awardAchievement(p,'boss_hunter');
           }
-          const typeName={normal:'Zumbi',runner:'Corredor',tank:'Tanque',exploder:'Explosivo',spitter:'Cuspidor',boss:'BOSS'}[result.zombie.type]||'Zumbi';
-          this._feed(headshot?`${p.name} eliminou ${typeName} · HEADSHOT`:`${p.name} eliminou ${typeName}`,headshot?'headshot':'kill',{playerId:p.id,zombieType:result.zombie.type});
+          const bossNames={butcher:'CARNICEIRO',warden:'CARCEREIRO',abomination:'ABOMINAÇÃO'};
+          let typeName=result.zombie.type==='boss'?(bossNames[result.zombie.variant]||'BOSS'):({normal:'Zumbi',runner:'Corredor',tank:'Tanque',exploder:'Explosivo',spitter:'Cuspidor'}[result.zombie.type]||'Zumbi');
+          if(result.zombie.elite){typeName=`ELITE ${typeName}`;p.score=(p.score||0)+75;}
+          this._feed(headshot?`${p.name} eliminou ${typeName} · HEADSHOT`:`${p.name} eliminou ${typeName}`,headshot?'headshot':'kill',{playerId:p.id,zombieType:result.zombie.type,elite:result.zombie.elite===true,eliteClass:result.zombie.eliteClass||null,variant:result.zombie.variant||null});
           const drop=this.lootSystem.maybeDrop(result.zombie);if(drop)this._emitRoom('loot:spawn',{...drop,createdAt:undefined});
           if(result.zombie.type==='exploder')this._explodeZombie(result.zombie);
         }
       }
-      rays.push({x:originX,y:originY,dirX:dir.x,dirY:dir.y,endX:originX+dir.x*endDistance,endY:originY+dir.y*endDistance,wallBlocked:!hit&&wallDistance!==null,hit:!!hit,zombieId,headshot,zombieDead});
+      rays.push({x:originX,y:originY,dirX:dir.x,dirY:dir.y,endX:originX+dir.x*endDistance,endY:originY+dir.y*endDistance,wallBlocked:!hit&&wallDistance!==null,hit:!!hit,zombieId,headshot,zombieDead,damage:damageDone});
     }
 
     if(hitAny&&!headshotAwarded)this._profileReward(p,{hits:1});

@@ -27,13 +27,14 @@ class ZombieSystem {
     this.bossPower = 1;
     this.difficulty = config.DIFFICULTIES?.normal || {zombieHealth:1,zombieSpeed:1,zombieDamage:1,zombieCount:1};
     this.eventModifiers = {speed:1,damage:1,spawnBurst:1};
+    this.mutation = null;
   }
 
   setDifficulty(id='normal') { this.difficulty = config.DIFFICULTIES?.[id] || config.DIFFICULTIES?.normal || this.difficulty; }
   setEventModifiers(mod={}) { this.eventModifiers = {speed:Number(mod.speed)||1,damage:Number(mod.damage)||1,spawnBurst:Number(mod.spawnBurst)||1}; }
   shiftTime(ms=0){ ms=Number(ms)||0; if(!ms)return; for(const z of this.zombies.values()){ if(z.lastAttackAt)z.lastAttackAt+=ms; if(z.deadAt)z.deadAt+=ms; } }
 
-  setRoundParameters({ totalZombies, healthMultiplier, speedMultiplier, roundNumber = 0, bossCount = 0, bossPower = 1 }) {
+  setRoundParameters({ totalZombies, healthMultiplier, speedMultiplier, roundNumber = 0, bossCount = 0, bossPower = 1, mutation = null }) {
     this.zombies.clear();
     this.maxZombiesThisRound = Math.max(0, Math.round(totalZombies));
     this.healthMultiplier = healthMultiplier;
@@ -44,6 +45,7 @@ class ZombieSystem {
     this.bossesSpawned = 0;
     this.bossCount = Math.max(0, Number(bossCount) || 0);
     this.bossPower = Math.max(1, Number(bossPower) || 1);
+    this.mutation = mutation || null;
   }
 
   get aliveCount() {
@@ -75,6 +77,11 @@ class ZombieSystem {
 
     const r = Math.random();
     const round = this.roundNumber;
+    const mut = this.mutation?.id || '';
+    if (mut === 'runner_rush' && round >= 2 && r < 0.68) return 'runner';
+    if (mut === 'armored' && round >= 5 && r < 0.34) return 'tank';
+    if (mut === 'toxic' && round >= 6 && r < 0.40) return 'spitter';
+    if (mut === 'volatile' && round >= 4 && r < 0.38) return 'exploder';
     if (round >= 8 && r < 0.10) return 'tank';
     if (round >= 6 && r < 0.22) return 'spitter';
     if (round >= 4 && r < 0.34) return 'exploder';
@@ -118,17 +125,23 @@ class ZombieSystem {
     const type = this._pickType();
     const spec = ZOMBIE_TYPES[type];
     const bossScale = type === 'boss' ? this.bossPower : 1;
-    const maxHealth = Math.max(1, Math.round(config.ZOMBIE_BASE_HEALTH * this.healthMultiplier * spec.health * bossScale * (this.difficulty?.zombieHealth || 1)));
+    const eliteChance = type === 'boss' || this.roundNumber < 4 ? 0 : Math.min(0.18, 0.035 + (this.roundNumber - 4) * 0.012);
+    const elite = Math.random() < eliteChance;
+    const eliteClass = elite ? ['frenzied','armored','plague'][Math.floor(Math.random()*3)] : null;
+    const eliteStats = eliteClass==='frenzied'?{hp:1.18,speed:1.28,damage:1.08,radius:1,reward:2.0}:eliteClass==='armored'?{hp:1.82,speed:.90,damage:1.15,radius:1.08,reward:2.25}:eliteClass==='plague'?{hp:1.38,speed:1.02,damage:1.28,radius:1.03,reward:2.15}:{hp:1,speed:1,damage:1,radius:1,reward:1};
+    const variant = type==='boss' ? (this.roundNumber%15===0?'abomination':this.roundNumber%10===0?'butcher':'warden') : null;
+    const variantStats = variant==='abomination'?{hp:1.28,speed:.92,damage:1.18,radius:1.10,reward:1.35}:variant==='butcher'?{hp:1.08,speed:1.12,damage:1.28,radius:1.04,reward:1.2}:{hp:1,speed:1,damage:1,radius:1,reward:1};
+    const maxHealth = Math.max(1, Math.round(config.ZOMBIE_BASE_HEALTH * this.healthMultiplier * spec.health * bossScale * eliteStats.hp * variantStats.hp * (this.difficulty?.zombieHealth || 1)));
     const id = nextZombieId++;
 
     this.zombies.set(id, {
-      id, type,
+      id, type, elite, eliteClass, variant,
       x: spot.x, y: spot.y,
       health: maxHealth, maxHealth,
-      radius: spec.radius,
-      speed: config.ZOMBIE_BASE_SPEED * this.speedMultiplier * spec.speed * (this.difficulty?.zombieSpeed || 1),
-      damage: Math.round(spec.damage * (type === 'boss' ? Math.min(2.2, this.bossPower) : 1) * (this.difficulty?.zombieDamage || 1)),
-      reward: Math.round(spec.reward * (type === 'boss' ? this.bossPower : 1)),
+      radius: spec.radius * eliteStats.radius * variantStats.radius,
+      speed: config.ZOMBIE_BASE_SPEED * this.speedMultiplier * spec.speed * eliteStats.speed * variantStats.speed * (this.difficulty?.zombieSpeed || 1),
+      damage: Math.round(spec.damage * (type === 'boss' ? Math.min(2.2, this.bossPower) : 1) * eliteStats.damage * variantStats.damage * (this.difficulty?.zombieDamage || 1)),
+      reward: Math.round(spec.reward * (type === 'boss' ? this.bossPower : 1) * eliteStats.reward * variantStats.reward),
       state: 'idle', targetPlayerId: null,
       directionX: 0, directionY: 1,
       wanderX: null, wanderY: null,
@@ -302,7 +315,7 @@ class ZombieSystem {
         id: z.id, type: z.type, x: z.x, y: z.y,
         health: z.health, maxHealth: z.maxHealth, state: z.state,
         directionX: z.directionX, directionY: z.directionY,
-        radius: z.radius, speed: z.speed,
+        radius: z.radius, speed: z.speed, elite:z.elite===true, eliteClass:z.eliteClass||null, variant:z.variant||null,
       });
     }
     return out;
@@ -312,7 +325,7 @@ class ZombieSystem {
   getCompactSnapshot() {
     const out = [];
     for (const z of this.zombies.values()) {
-      out.push([z.id,z.type,Math.round(z.x*10)/10,Math.round(z.y*10)/10,z.health,z.maxHealth,z.state,Math.round(z.directionX*1000)/1000,Math.round(z.directionY*1000)/1000,z.radius,Math.round(z.speed*10)/10]);
+      out.push([z.id,z.type,Math.round(z.x*10)/10,Math.round(z.y*10)/10,z.health,z.maxHealth,z.state,Math.round(z.directionX*1000)/1000,Math.round(z.directionY*1000)/1000,z.radius,Math.round(z.speed*10)/10,z.elite?1:0,z.eliteClass||null,z.variant||null]);
     }
     return out;
   }

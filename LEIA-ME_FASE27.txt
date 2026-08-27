@@ -1,0 +1,18 @@
+ZOMBIE SURVIVAL ONLINE — SERVIDOR FASE 27
+
+ELITES
+- Frenético: mais rápido.
+- Blindado: muito mais vida.
+- Praga: mais dano e vida.
+- Chances crescem gradualmente a partir do round 4 e ficam limitadas para não dominar toda a horda.
+
+MUTAÇÕES
+Rounds especiais não-boss a cada quatro rounds alteram a composição da horda.
+
+BOSSES
+- Carcereiro
+- Carniceiro
+- Abominação
+
+PROTOCOLO
+O snapshot compacto adiciona: elite, eliteClass e variant. O cliente Fase 27 entende os campos antigos e novos.
